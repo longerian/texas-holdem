@@ -653,7 +653,8 @@
             }
             
             const toCall = gameState.currentBet - player.bet;
-            const canRaise = player.chips > toCall;
+            const minRaise = gameState.currentBet + 10;  // 最小加注额
+            const canRaise = player.chips + player.bet >= minRaise;  // 必须有足够筹码支付最小加注
             
             let html = '<div class="controls-row">';
             
@@ -671,9 +672,8 @@
             html += '<button class="fold-btn" onclick="playerFold()">弃牌</button>';
             html += '</div>';
             
-            if (canRaise && toCall < player.chips) {
-                const maxRaise = player.chips + player.bet;
-                const minRaise = gameState.currentBet + 10;
+            if (canRaise) {
+                const maxRaise = player.chips + player.bet;  // 可以加注的最大金额
                 
                 html += `
                     <div class="raise-controls" id="raiseControls" style="display: none;">
@@ -803,6 +803,15 @@
         // 玩家动作
         function playerCheck() {
             const player = gameState.players[0];
+            const toCall = gameState.currentBet - player.bet;
+            
+            // 检查是否可以过牌
+            if (toCall > 0) {
+                console.error('错误：不能过牌，需要支付', toCall);
+                setMessage('错误：不能过牌，需要跟注 ' + toCall);
+                return;
+            }
+            
             setMessage('你选择过牌');
             nextPlayer();
         }
@@ -837,6 +846,20 @@
             const player = gameState.players[0];
             const raiseAmount = parseInt(document.getElementById('raiseSlider').value);
             const toCall = raiseAmount - player.bet;
+            
+            // 验证加注金额
+            const minRaise = gameState.currentBet + 10;
+            if (raiseAmount < minRaise) {
+                console.error('错误：加注金额太小，至少需要', minRaise);
+                setMessage(`错误：加注金额至少需要 ${minRaise}`);
+                return;
+            }
+            
+            if (raiseAmount > player.chips + player.bet) {
+                console.error('错误：加注金额超过筹码');
+                setMessage('错误：加注金额超过你的筹码');
+                return;
+            }
             
             // 如果需要支付的金额大于等于筹码，则 all in
             if (toCall >= player.chips) {
