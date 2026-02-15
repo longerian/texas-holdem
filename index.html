@@ -903,21 +903,26 @@
                 return;
             }
             
-            // 找到下一个活跃玩家
-            let nextIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
-            let loopCount = 0;
+            // 检查是否所有活跃玩家都已行动且下注相等
+            const allMatched = activePlayers.every(p => 
+                p.isAllIn || p.bet === gameState.currentBet
+            );
             
-            while (loopCount < NUM_PLAYERS) {
+            if (allMatched) {
+                // 所有人都已匹配下注，进入下一阶段
+                nextPhase();
+                return;
+            }
+            
+            // 找到下一个需要行动的玩家（未弃牌且未 all in）
+            let nextIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
+            let attempts = 0;
+            
+            while (attempts < NUM_PLAYERS) {
                 const nextPlayer = gameState.players[nextIndex];
+                
+                // 跳过已弃牌或已 all in 的玩家
                 if (!nextPlayer.folded && !nextPlayer.isAllIn) {
-                    // 检查是否所有人都已行动且下注相等
-                    const allBetsEqual = activePlayers.every(p => p.bet === gameState.currentBet || p.isAllIn);
-                    
-                    if (allBetsEqual && nextIndex === getFirstPlayerIndex()) {
-                        nextPhase();
-                        return;
-                    }
-                    
                     gameState.currentPlayerIndex = nextIndex;
                     updateDisplay();
                     updateControls();
@@ -927,12 +932,34 @@
                     }
                     return;
                 }
+                
                 nextIndex = (nextIndex + 1) % NUM_PLAYERS;
-                loopCount++;
+                attempts++;
             }
             
-            // 如果所有玩家都已行动完毕，进入下一阶段
-            nextPhase();
+            // 如果所有玩家都是 all in 或已弃牌，进入摊牌
+            if (activePlayers.filter(p => !p.isAllIn).length <= 1) {
+                // 直接进入摊牌
+                while (gameState.phase !== 'river') {
+                    if (gameState.phase === 'preflop') {
+                        gameState.phase = 'flop';
+                        gameState.communityCards = [
+                            gameState.deck.pop(),
+                            gameState.deck.pop(),
+                            gameState.deck.pop()
+                        ];
+                    } else if (gameState.phase === 'flop') {
+                        gameState.phase = 'turn';
+                        gameState.communityCards.push(gameState.deck.pop());
+                    } else if (gameState.phase === 'turn') {
+                        gameState.phase = 'river';
+                        gameState.communityCards.push(gameState.deck.pop());
+                    }
+                }
+                showdown();
+            } else {
+                nextPhase();
+            }
         }
         
         function getFirstPlayerIndex() {
