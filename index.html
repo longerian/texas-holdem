@@ -466,7 +466,8 @@
             gameActive: false,
             smallBlind: 5,
             bigBlind: 10,
-            dealerIndex: 0
+            dealerIndex: 0,
+            playersInitialized: false // 标记玩家是否已初始化
         };
         
         const suits = ['♠', '♥', '♦', '♣'];
@@ -507,6 +508,14 @@
                     isAllIn: false
                 });
             }
+        }
+        
+        // 重置游戏（完全重新开始）
+        function resetGame() {
+            initPlayers();
+            gameState.playersInitialized = true;
+            gameState.dealerIndex = Math.floor(Math.random() * NUM_PLAYERS);
+            startNewGame();
         }
         
         // 发牌
@@ -602,19 +611,42 @@
             const controlsDiv = document.getElementById('gameControls');
             
             if (!gameState.gameActive) {
+                // 检查游戏是否结束
+                const activePlayers = gameState.players.filter(p => p.chips > 0 || (p.isHuman && p.chips >= 0));
+                const gameEnded = activePlayers.length < 2;
+                const playerBroke = gameState.players[0].chips === 0;
+                
+                let buttonHtml = '';
+                if (gameEnded || playerBroke) {
+                    buttonHtml = `<button class="new-game" onclick="resetGame()">重新开始</button>`;
+                } else {
+                    buttonHtml = `<button class="new-game" onclick="startNewGame()">下一局</button>`;
+                }
+                
                 controlsDiv.innerHTML = `
                     <div class="controls-row">
-                        <button class="new-game" onclick="startNewGame()">开始游戏</button>
+                        ${buttonHtml}
                     </div>
                 `;
                 return;
             }
             
             const player = gameState.players[0];
-            if (player.folded || gameState.currentPlayerIndex !== 0) {
+            
+            // 如果玩家已弃牌或 all in，不显示控制按钮
+            if (player.folded || player.isAllIn) {
                 controlsDiv.innerHTML = `
                     <div class="controls-row">
-                        <button disabled>${gameState.currentPlayerIndex === 0 && !player.folded ? '你的回合' : '等待其他玩家...'}</button>
+                        <button disabled>${player.folded ? '已弃牌' : '已 All in'}</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (gameState.currentPlayerIndex !== 0) {
+                controlsDiv.innerHTML = `
+                    <div class="controls-row">
+                        <button disabled>等待其他玩家...</button>
                     </div>
                 `;
                 return;
@@ -626,7 +658,12 @@
             let html = '<div class="controls-row">';
             
             if (toCall > 0) {
-                html += `<button class="call-btn" onclick="playerCall()">跟注 ${toCall}</button>`;
+                if (toCall >= player.chips) {
+                    // All in 的情况
+                    html += `<button class="call-btn" onclick="playerCall()">All in (${player.chips})</button>`;
+                } else {
+                    html += `<button class="call-btn" onclick="playerCall()">跟注 ${toCall}</button>`;
+                }
             } else {
                 html += `<button class="call-btn" onclick="playerCheck()">过牌</button>`;
             }
@@ -634,16 +671,19 @@
             html += '<button class="fold-btn" onclick="playerFold()">弃牌</button>';
             html += '</div>';
             
-            if (canRaise) {
+            if (canRaise && toCall < player.chips) {
+                const maxRaise = player.chips + player.bet;
+                const minRaise = gameState.currentBet + 10;
+                
                 html += `
                     <div class="raise-controls" id="raiseControls" style="display: none;">
                         <div class="raise-slider-container">
                             <div class="raise-display">
                                 <span>加注金额:</span>
-                                <span class="raise-amount" id="raiseAmount">${gameState.currentBet + 20}</span>
+                                <span class="raise-amount" id="raiseAmount">${minRaise}</span>
                             </div>
-                            <input type="range" id="raiseSlider" min="${gameState.currentBet + 10}" 
-                                   max="${player.chips + player.bet}" value="${gameState.currentBet + 20}" 
+                            <input type="range" id="raiseSlider" min="${minRaise}" 
+                                   max="${maxRaise}" value="${minRaise}" 
                                    oninput="updateRaiseAmount()">
                         </div>
                         <div class="raise-buttons">
@@ -675,36 +715,83 @@
         
         // 开始新游戏
         function startNewGame() {
-            initPlayers();
+            // 首次游戏时初始化玩家
+            if (!gameState.playersInitialized) {
+                initPlayers();
+                gameState.playersInitialized = true;
+            }
+            
+            // 检查是否有足够的活跃玩家
+            const activePlayers = gameState.players.filter(p => p.chips > 0 || p.isHuman);
+            if (activePlayers.length < 2) {
+                setMessage('游戏结束！没有足够的玩家继续游戏');
+                return;
+            }
+            
+            // 重置玩家状态（但保留筹码）
+            gameState.players.forEach(player => {
+                player.hand = [];
+                player.bet = 0;
+                player.folded = player.chips <= 0; // 筹码为0的玩家自动弃牌
+                player.isAllIn = false;
+            });
+            
             gameState.gameActive = true;
             gameState.pot = 0;
             gameState.currentBet = gameState.bigBlind;
             gameState.phase = 'preflop';
-            gameState.dealerIndex = Math.floor(Math.random() * NUM_PLAYERS);
+            gameState.dealerIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
+            
+            // 找到有筹码的玩家
+            let dealerPlayer = gameState.players[gameState.dealerIndex];
+            while (dealerPlayer.chips <= 0) {
+                gameState.dealerIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
+                dealerPlayer = gameState.players[gameState.dealerIndex];
+            }
             
             // 发牌
             dealCards();
             
             // 设置盲注
-            const smallBlindIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
-            const bigBlindIndex = (gameState.dealerIndex + 2) % NUM_PLAYERS;
+            let smallBlindIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
+            while (gameState.players[smallBlindIndex].chips <= 0) {
+                smallBlindIndex = (smallBlindIndex + 1) % NUM_PLAYERS;
+            }
+            
+            let bigBlindIndex = (smallBlindIndex + 1) % NUM_PLAYERS;
+            while (gameState.players[bigBlindIndex].chips <= 0) {
+                bigBlindIndex = (bigBlindIndex + 1) % NUM_PLAYERS;
+            }
             
             const smallBlindPlayer = gameState.players[smallBlindIndex];
             const bigBlindPlayer = gameState.players[bigBlindIndex];
             
-            smallBlindPlayer.chips -= gameState.smallBlind;
-            smallBlindPlayer.bet = gameState.smallBlind;
+            // 盲注不能超过玩家筹码
+            const actualSmallBlind = Math.min(gameState.smallBlind, smallBlindPlayer.chips);
+            const actualBigBlind = Math.min(gameState.bigBlind, bigBlindPlayer.chips);
             
-            bigBlindPlayer.chips -= gameState.bigBlind;
-            bigBlindPlayer.bet = gameState.bigBlind;
+            smallBlindPlayer.chips -= actualSmallBlind;
+            smallBlindPlayer.bet = actualSmallBlind;
+            if (smallBlindPlayer.chips === 0) smallBlindPlayer.isAllIn = true;
             
-            gameState.pot = gameState.smallBlind + gameState.bigBlind;
+            bigBlindPlayer.chips -= actualBigBlind;
+            bigBlindPlayer.bet = actualBigBlind;
+            if (bigBlindPlayer.chips === 0) bigBlindPlayer.isAllIn = true;
+            
+            gameState.pot = actualSmallBlind + actualBigBlind;
+            gameState.currentBet = actualBigBlind;
+            
+            // 从大盲注后开始
             gameState.currentPlayerIndex = (bigBlindIndex + 1) % NUM_PLAYERS;
+            while (gameState.players[gameState.currentPlayerIndex].chips <= 0) {
+                gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
+            }
             
             updateDisplay();
             
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            setMessage(`第 ${gameState.dealerIndex + 1} 位发牌 | ${currentPlayer.name}的回合`);
+            const dealerInfo = `庄家: ${gameState.players[gameState.dealerIndex].name}`;
+            setMessage(`${dealerInfo} | ${currentPlayer.name}的回合`);
             updateControls();
             
             // 如果当前玩家是电脑，自动行动
@@ -724,11 +811,21 @@
             const player = gameState.players[0];
             const toCall = gameState.currentBet - player.bet;
             
-            player.chips -= toCall;
-            player.bet = gameState.currentBet;
-            gameState.pot += toCall;
+            // 如果需要跟注的金额大于筹码，则 all in
+            if (toCall >= player.chips) {
+                // All in
+                gameState.pot += player.chips;
+                player.bet += player.chips;
+                player.chips = 0;
+                player.isAllIn = true;
+                setMessage(`你 All in! (${player.bet} 筹码)`);
+            } else {
+                player.chips -= toCall;
+                player.bet = gameState.currentBet;
+                gameState.pot += toCall;
+                setMessage(`你跟注 ${toCall} 筹码`);
+            }
             
-            setMessage(`你跟注 ${toCall} 筹码`);
             updateDisplay();
             nextPlayer();
         }
@@ -738,12 +835,22 @@
             const raiseAmount = parseInt(document.getElementById('raiseSlider').value);
             const toCall = raiseAmount - player.bet;
             
-            player.chips -= toCall;
-            player.bet = raiseAmount;
-            gameState.currentBet = raiseAmount;
-            gameState.pot += toCall;
+            // 如果加注金额等于所有筹码，则 all in
+            if (toCall >= player.chips) {
+                gameState.pot += player.chips;
+                player.bet += player.chips;
+                player.chips = 0;
+                player.isAllIn = true;
+                gameState.currentBet = Math.max(gameState.currentBet, player.bet);
+                setMessage(`你 All in! (${player.bet} 筹码)`);
+            } else {
+                player.chips -= toCall;
+                player.bet = raiseAmount;
+                gameState.currentBet = raiseAmount;
+                gameState.pot += toCall;
+                setMessage(`你加注到 ${raiseAmount} 筹码`);
+            }
             
-            setMessage(`你加注到 ${raiseAmount} 筹码`);
             hideRaiseControls();
             updateDisplay();
             nextPlayer();
@@ -822,7 +929,20 @@
             
             // 简化的AI策略
             let decision;
-            if (handStrength > 0.7) {
+            if (player.chips <= 0) {
+                // 筹码为0，跳过
+                nextPlayer();
+                return;
+            }
+            
+            if (toCall >= player.chips) {
+                // 需要all in才能跟注
+                if (handStrength > 0.5 || Math.random() > 0.7) {
+                    decision = 'allin';
+                } else {
+                    decision = 'fold';
+                }
+            } else if (handStrength > 0.7) {
                 decision = Math.random() > 0.3 ? 'raise' : 'call';
             } else if (handStrength > 0.4) {
                 decision = toCall === 0 ? 'check' : 'call';
@@ -845,17 +965,38 @@
                     setMessage(`${player.name} 跟注 ${toCall}`);
                     updateDisplay();
                     nextPlayer();
-                } else if (decision === 'raise') {
+                } else if (decision === 'allin') {
+                    // All in
+                    gameState.pot += player.chips;
+                    player.bet += player.chips;
+                    gameState.currentBet = Math.max(gameState.currentBet, player.bet);
+                    player.chips = 0;
+                    player.isAllIn = true;
+                    setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                    updateDisplay();
+                    nextPlayer();
+                } else if (decision === 'raise' && player.chips > toCall) {
                     const raiseAmount = Math.min(
                         gameState.currentBet + Math.floor(Math.random() * 30) + 10,
                         player.chips + player.bet
                     );
                     const toCallNew = raiseAmount - player.bet;
-                    player.chips -= toCallNew;
-                    player.bet = raiseAmount;
-                    gameState.currentBet = raiseAmount;
-                    gameState.pot += toCallNew;
-                    setMessage(`${player.name} 加注到 ${raiseAmount}`);
+                    
+                    if (toCallNew >= player.chips) {
+                        // All in instead of raise
+                        gameState.pot += player.chips;
+                        player.bet += player.chips;
+                        gameState.currentBet = Math.max(gameState.currentBet, player.bet);
+                        player.chips = 0;
+                        player.isAllIn = true;
+                        setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                    } else {
+                        player.chips -= toCallNew;
+                        player.bet = raiseAmount;
+                        gameState.currentBet = raiseAmount;
+                        gameState.pot += toCallNew;
+                        setMessage(`${player.name} 加注到 ${raiseAmount}`);
+                    }
                     updateDisplay();
                     nextPlayer();
                 } else {
