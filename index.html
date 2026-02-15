@@ -467,7 +467,9 @@
             smallBlind: 5,
             bigBlind: 10,
             dealerIndex: 0,
-            playersInitialized: false // 标记玩家是否已初始化
+            playersInitialized: false, // 标记玩家是否已初始化
+            lastRaisePlayerIndex: -1,  // 记录最后一次加注的玩家索引
+            bettingRoundComplete: false // 标记当前下注轮次是否完成
         };
         
         const suits = ['♠', '♥', '♦', '♣'];
@@ -741,6 +743,7 @@
             gameState.currentBet = gameState.bigBlind;
             gameState.phase = 'preflop';
             gameState.dealerIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
+            gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             
             // 找到有筹码的玩家
             let dealerPlayer = gameState.players[gameState.dealerIndex];
@@ -878,6 +881,7 @@
                 player.bet = raiseAmount;  // 新的总下注
                 gameState.currentBet = raiseAmount;  // 更新当前下注
                 gameState.pot += toCall;
+                gameState.lastRaisePlayerIndex = 0;  // 记录加注者（玩家索引0）
                 setMessage(`你加注到 ${raiseAmount} 筹码`);
             }
             
@@ -903,15 +907,21 @@
                 return;
             }
             
-            // 检查是否所有活跃玩家都已行动且下注相等
+            // 检查是否所有活跃玩家都已匹配当前下注
             const allMatched = activePlayers.every(p => 
                 p.isAllIn || p.bet === gameState.currentBet
             );
             
+            // 如果有人加注，检查是否轮回到加注者
             if (allMatched) {
-                // 所有人都已匹配下注，进入下一阶段
-                nextPhase();
-                return;
+                if (gameState.lastRaisePlayerIndex >= 0) {
+                    // 有人加注过，必须轮回到加注者才能进入下一阶段
+                    // 这里不进入下一阶段，继续让其他玩家行动
+                } else {
+                    // 没人加注，所有人都已匹配，进入下一阶段
+                    nextPhase();
+                    return;
+                }
             }
             
             // 找到下一个需要行动的玩家（未弃牌且未 all in）
@@ -923,6 +933,13 @@
                 
                 // 跳过已弃牌或已 all in 的玩家
                 if (!nextPlayer.folded && !nextPlayer.isAllIn) {
+                    // 检查是否应该进入下一阶段
+                    if (allMatched && gameState.lastRaisePlayerIndex >= 0 && nextIndex === gameState.lastRaisePlayerIndex) {
+                        // 轮回到加注者，且所有人都已匹配，进入下一阶段
+                        nextPhase();
+                        return;
+                    }
+                    
                     gameState.currentPlayerIndex = nextIndex;
                     updateDisplay();
                     updateControls();
@@ -1067,6 +1084,7 @@
                         player.bet = raiseAmount;
                         gameState.currentBet = raiseAmount;
                         gameState.pot += toCallNew;
+                        gameState.lastRaisePlayerIndex = gameState.currentPlayerIndex;  // 记录加注者
                         setMessage(`${player.name} 加注到 ${raiseAmount}`);
                     }
                     updateDisplay();
@@ -1082,11 +1100,12 @@
         
         // 进入下一阶段
         function nextPhase() {
-            // 重置所有玩家的下注
+            // 重置所有玩家的下注和加注记录
             gameState.players.forEach(player => {
                 player.bet = 0;
             });
             gameState.currentBet = 0;
+            gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             
             if (gameState.phase === 'preflop') {
                 gameState.phase = 'flop';
