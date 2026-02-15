@@ -811,17 +811,20 @@
             const player = gameState.players[0];
             const toCall = gameState.currentBet - player.bet;
             
-            // 如果需要跟注的金额大于筹码，则 all in
+            // 如果需要跟注的金额大于等于筹码，则 all in
             if (toCall >= player.chips) {
-                // All in
-                gameState.pot += player.chips;
-                player.bet += player.chips;
+                // All in：筹码不足，推入所有剩余筹码
+                const allInAmount = player.chips;
+                gameState.pot += allInAmount;
+                player.bet += allInAmount;  // 玩家的实际下注
                 player.chips = 0;
                 player.isAllIn = true;
+                // 注意：currentBet 不变，因为 all in 金额可能小于 currentBet
                 setMessage(`你 All in! (${player.bet} 筹码)`);
             } else {
+                // 正常跟注：支付差额
                 player.chips -= toCall;
-                player.bet = gameState.currentBet;
+                player.bet = gameState.currentBet;  // 匹配当前下注
                 gameState.pot += toCall;
                 setMessage(`你跟注 ${toCall} 筹码`);
             }
@@ -835,18 +838,22 @@
             const raiseAmount = parseInt(document.getElementById('raiseSlider').value);
             const toCall = raiseAmount - player.bet;
             
-            // 如果加注金额等于所有筹码，则 all in
+            // 如果需要支付的金额大于等于筹码，则 all in
             if (toCall >= player.chips) {
-                gameState.pot += player.chips;
-                player.bet += player.chips;
+                // All in：筹码不足，推入所有剩余筹码
+                const allInAmount = player.chips;
+                gameState.pot += allInAmount;
+                player.bet += allInAmount;  // 玩家的实际下注
                 player.chips = 0;
                 player.isAllIn = true;
+                // 只有在 all in 金额大于当前下注时才更新 currentBet
                 gameState.currentBet = Math.max(gameState.currentBet, player.bet);
                 setMessage(`你 All in! (${player.bet} 筹码)`);
             } else {
+                // 正常加注：支付差额，设置新的当前下注
                 player.chips -= toCall;
-                player.bet = raiseAmount;
-                gameState.currentBet = raiseAmount;
+                player.bet = raiseAmount;  // 新的总下注
+                gameState.currentBet = raiseAmount;  // 更新当前下注
                 gameState.pot += toCall;
                 setMessage(`你加注到 ${raiseAmount} 筹码`);
             }
@@ -959,16 +966,29 @@
                     setMessage(`${player.name} 过牌`);
                     nextPlayer();
                 } else if (decision === 'call') {
-                    player.chips -= toCall;
-                    player.bet = gameState.currentBet;
-                    gameState.pot += toCall;
-                    setMessage(`${player.name} 跟注 ${toCall}`);
+                    // 检查是否需要 all in
+                    if (toCall >= player.chips) {
+                        // All in
+                        const allInAmount = player.chips;
+                        gameState.pot += allInAmount;
+                        player.bet += allInAmount;
+                        player.chips = 0;
+                        player.isAllIn = true;
+                        setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                    } else {
+                        // 正常跟注
+                        player.chips -= toCall;
+                        player.bet = gameState.currentBet;
+                        gameState.pot += toCall;
+                        setMessage(`${player.name} 跟注 ${toCall}`);
+                    }
                     updateDisplay();
                     nextPlayer();
                 } else if (decision === 'allin') {
                     // All in
-                    gameState.pot += player.chips;
-                    player.bet += player.chips;
+                    const allInAmount = player.chips;
+                    gameState.pot += allInAmount;
+                    player.bet += allInAmount;
                     gameState.currentBet = Math.max(gameState.currentBet, player.bet);
                     player.chips = 0;
                     player.isAllIn = true;
@@ -984,13 +1004,15 @@
                     
                     if (toCallNew >= player.chips) {
                         // All in instead of raise
-                        gameState.pot += player.chips;
-                        player.bet += player.chips;
+                        const allInAmount = player.chips;
+                        gameState.pot += allInAmount;
+                        player.bet += allInAmount;
                         gameState.currentBet = Math.max(gameState.currentBet, player.bet);
                         player.chips = 0;
                         player.isAllIn = true;
                         setMessage(`${player.name} All in! (${player.bet} 筹码)`);
                     } else {
+                        // 正常加注
                         player.chips -= toCallNew;
                         player.bet = raiseAmount;
                         gameState.currentBet = raiseAmount;
