@@ -7,6 +7,31 @@
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
 
+## 🎮 在线演示
+
+**GitHub Pages**: [https://longerian.github.io/texas-holdem/](https://longerian.github.io/texas-holdem/)
+
+直接在浏览器中打开即可开始游戏，无需下载和安装！
+
+## 🚀 快速开始
+
+### 方式一：在线访问（推荐）
+直接访问 GitHub Pages 地址：[https://longerian.github.io/texas-holdem/](https://longerian.github.io/texas-holdem/)
+
+### 方式二：本地运行
+```bash
+# 克隆仓库
+git clone https://github.com/longerian/texas-holdem.git
+
+# 进入目录
+cd texas-holdem
+
+# 用浏览器打开 index.html
+# 或者使用本地服务器
+python3 -m http.server 8000
+# 然后访问 http://localhost:8000
+```
+
 ## 🎮 游戏特色
 
 ✨ **完整的德州扑克规则**
