@@ -2362,6 +2362,8 @@
                         player.chips = 0;
                         player.isAllIn = true;
                         setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                        // 语音播报
+                        soundSystem.announceAction(player.name, 'allin', player.bet);
                     } else {
                         player.chips -= toCallNew;
                         player.bet = raiseAmount;
@@ -2370,6 +2372,8 @@
                         // 加注后清空已行动列表
                         gameState.actedThisRound = [playerIndex];
                         setMessage(`${player.name} 加注到 ${raiseAmount}`);
+                        // 语音播报
+                        soundSystem.announceAction(player.name, 'raise', raiseAmount);
                     }
                     updateDisplay();
                     nextPlayer();
@@ -2380,6 +2384,8 @@
                     }
                     if (facing3bet) recordAction(player.id, 'foldTo3bet', 0, gameState.phase);
                     setMessage(`${player.name} 弃牌`);
+                    // 语音播报
+                    soundSystem.announceAction(player.name, 'fold');
                     updateDisplay();
                     nextPlayer();
                 }
