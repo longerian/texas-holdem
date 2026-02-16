@@ -464,6 +464,7 @@
             <div>
                 <button class="audio-btn active" id="bgmBtn" onclick="toggleBGM()">🎵 背景音乐</button>
                 <button class="audio-btn active" id="sfxBtn" onclick="toggleSFX()">🔊 音效</button>
+                <button class="audio-btn active" id="voiceBtn" onclick="toggleVoice()">🎙️ 语音播报</button>
             </div>
             <div class="volume-control">
                 <span style="color: white; font-size: 0.85em;">音量:</span>
@@ -518,6 +519,7 @@
                 this.audioContext = null;
                 this.bgmEnabled = true;
                 this.sfxEnabled = true;
+                this.voiceEnabled = true;
                 this.volume = 0.5;
                 this.bgmOscillator = null;
                 this.bgmGain = null;
@@ -530,6 +532,63 @@
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 }
                 return this.audioContext;
+            }
+            
+            // 语音播报功能
+            speak(text) {
+                if (!this.voiceEnabled || !('speechSynthesis' in window)) return;
+                
+                // 取消之前的语音
+                window.speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-CN';
+                utterance.rate = 1.1;  // 稍快一点，更干脆
+                utterance.pitch = 1.2; // 音调稍高，更明亮
+                utterance.volume = this.volume;
+                
+                // 尝试选择中文女声
+                const voices = window.speechSynthesis.getVoices();
+                const chineseVoice = voices.find(voice => 
+                    voice.lang.includes('zh') && voice.name.includes('Female')
+                ) || voices.find(voice => voice.lang.includes('zh'));
+                
+                if (chineseVoice) {
+                    utterance.voice = chineseVoice;
+                }
+                
+                window.speechSynthesis.speak(utterance);
+            }
+            
+            // 播报玩家操作
+            announceAction(playerName, action, amount = null) {
+                let text = '';
+                
+                if (action === 'fold') {
+                    text = `${playerName}弃牌`;
+                } else if (action === 'check') {
+                    text = `${playerName}过牌`;
+                } else if (action === 'call') {
+                    text = `${playerName}跟注${amount}`;
+                } else if (action === 'raise') {
+                    text = `${playerName}加注到${amount}`;
+                } else if (action === 'allin') {
+                    text = `${playerName}全押${amount}筹码`;
+                } else if (action === 'deal') {
+                    text = '发牌';
+                } else if (action === 'flop') {
+                    text = '翻牌';
+                } else if (action === 'turn') {
+                    text = '转牌';
+                } else if (action === 'river') {
+                    text = '河牌';
+                } else if (action === 'win') {
+                    text = `恭喜！${playerName}获胜！`;
+                }
+                
+                if (text) {
+                    this.speak(text);
+                }
             }
             
             // 播放发牌音效
@@ -721,6 +780,15 @@
                     this.bgmGain.gain.setValueAtTime(this.volume * 0.1, this.audioContext.currentTime);
                 }
             }
+            
+            // 切换语音播报
+            toggleVoice() {
+                this.voiceEnabled = !this.voiceEnabled;
+                if (!this.voiceEnabled) {
+                    window.speechSynthesis.cancel();
+                }
+                return this.voiceEnabled;
+            }
         }
         
         // 创建全局音效实例
@@ -741,6 +809,14 @@
             btn.classList.toggle('active', enabled);
             btn.classList.toggle('muted', !enabled);
             btn.textContent = enabled ? '🔊 音效' : '🔇 音效';
+        }
+        
+        function toggleVoice() {
+            const enabled = soundSystem.toggleVoice();
+            const btn = document.getElementById('voiceBtn');
+            btn.classList.toggle('active', enabled);
+            btn.classList.toggle('muted', !enabled);
+            btn.textContent = enabled ? '🎙️ 语音播报' : '🔇 语音播报';
         }
         
         function setVolume(value) {
@@ -827,6 +903,8 @@
             
             // 播放发牌音效
             soundSystem.playDealSound();
+            // 语音播报
+            soundSystem.announceAction('', 'deal');
         }
         
         // 显示卡牌
@@ -1128,6 +1206,8 @@
             
             // 播放下注音效
             soundSystem.playBetSound();
+            // 语音播报
+            soundSystem.announceAction('你', 'check');
             
             // 标记玩家已行动
             if (!gameState.actedThisRound.includes(0)) {
@@ -1159,11 +1239,15 @@
                 player.chips = 0;
                 player.isAllIn = true;
                 setMessage(`你 All in! (${player.bet} 筹码)`);
+                // 语音播报
+                soundSystem.announceAction('你', 'allin', player.bet);
             } else {
                 player.chips -= toCall;
                 player.bet = gameState.currentBet;
                 gameState.pot += toCall;
                 setMessage(`你跟注 ${toCall} 筹码`);
+                // 语音播报
+                soundSystem.announceAction('你', 'call', toCall);
             }
             
             updateDisplay();
@@ -1186,6 +1270,9 @@
                 return;
             }
             
+            // 播放下注音效
+            soundSystem.playBetSound();
+            
             // 标记玩家已行动
             if (!gameState.actedThisRound.includes(0)) {
                 gameState.actedThisRound.push(0);
@@ -1200,6 +1287,8 @@
                 player.isAllIn = true;
                 gameState.currentBet = Math.max(gameState.currentBet, player.bet);
                 setMessage(`你 All in! (${player.bet} 筹码)`);
+                // 语音播报
+                soundSystem.announceAction('你', 'allin', player.bet);
             } else {
                 // 正常加注
                 player.chips -= toCall;
@@ -1209,6 +1298,8 @@
                 // 加注后，清空已行动列表（所有人需要重新对新的下注做出反应）
                 gameState.actedThisRound = [0];  // 保留当前加注者
                 setMessage(`你加注到 ${raiseAmount} 筹码`);
+                // 语音播报
+                soundSystem.announceAction('你', 'raise', raiseAmount);
             }
             
             hideRaiseControls();
@@ -1222,6 +1313,8 @@
             
             // 播放弃牌音效
             soundSystem.playFoldSound();
+            // 语音播报
+            soundSystem.announceAction('你', 'fold');
             
             // 标记玩家已行动（弃牌也算行动）
             if (!gameState.actedThisRound.includes(0)) {
@@ -2156,6 +2249,8 @@
                         gameState.actedThisRound.push(playerIndex);
                     }
                     setMessage(`${player.name} 过牌`);
+                    // 语音播报
+                    soundSystem.announceAction(player.name, 'check');
                     updateDisplay();
                     nextPlayer();
                 } else if (decision === 'call') {
@@ -2171,11 +2266,15 @@
                         player.chips = 0;
                         player.isAllIn = true;
                         setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                        // 语音播报
+                        soundSystem.announceAction(player.name, 'allin', player.bet);
                     } else {
                         player.chips -= toCall;
                         player.bet = gameState.currentBet;
                         gameState.pot += toCall;
                         setMessage(`${player.name} 跟注 ${toCall}`);
+                        // 语音播报
+                        soundSystem.announceAction(player.name, 'call', toCall);
                     }
                     updateDisplay();
                     nextPlayer();
@@ -2192,6 +2291,8 @@
                     player.chips = 0;
                     player.isAllIn = true;
                     setMessage(`${player.name} All in! (${player.bet} 筹码)`);
+                    // 语音播报
+                    soundSystem.announceAction(player.name, 'allin', player.bet);
                     updateDisplay();
                     nextPlayer();
                 } else if (decision === 'raise' && player.chips > toCall) {
@@ -2333,14 +2434,20 @@
                     gameState.deck.pop()
                 ];
                 setMessage('翻牌!');
+                // 语音播报
+                soundSystem.announceAction('', 'flop');
             } else if (gameState.phase === 'flop') {
                 gameState.phase = 'turn';
                 gameState.communityCards.push(gameState.deck.pop());
                 setMessage('转牌!');
+                // 语音播报
+                soundSystem.announceAction('', 'turn');
             } else if (gameState.phase === 'turn') {
                 gameState.phase = 'river';
                 gameState.communityCards.push(gameState.deck.pop());
                 setMessage('河牌!');
+                // 语音播报
+                soundSystem.announceAction('', 'river');
             } else {
                 showdown();
                 return;
@@ -2418,9 +2525,12 @@
                 const winner = winners[0].player;
                 winner.chips += gameState.pot;
                 const isPlayer = winner.isHuman;
+                const winnerName = isPlayer ? '你' : winner.name;
                 setMessage(`${isPlayer ? '🎉 你' : winner.name}赢了! ${winners[0].handRank.name} - 赢得 ${gameState.pot} 筹码!`);
                 // 播放获胜音效
                 soundSystem.playWinSound();
+                // 语音播报
+                soundSystem.announceAction(winnerName, 'win');
             } else {
                 // 平局
                 const splitPot = Math.floor(gameState.pot / winners.length);
