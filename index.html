@@ -551,7 +551,15 @@
             const grid = document.getElementById('playersGrid');
             let html = '';
             
-            gameState.players.forEach((player, index) => {
+            // 渲染顺序：电脑玩家在前，玩家（id=0）在最后
+            const renderOrder = [];
+            for (let i = 1; i < NUM_PLAYERS; i++) {
+                renderOrder.push(i);
+            }
+            renderOrder.push(0); // 玩家放最后
+            
+            renderOrder.forEach(index => {
+                const player = gameState.players[index];
                 const isCurrentPlayer = gameState.currentPlayerIndex === index && gameState.gameActive;
                 const showCards = player.isHuman || gameState.phase === 'showdown';
                 const foldedClass = player.folded ? 'folded' : '';
