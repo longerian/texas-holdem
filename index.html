@@ -954,7 +954,26 @@
                                        bigBlindPlayer.bet === gameState.currentBet;
             
             if (allActed && allMatched && !bigBlindHasOption) {
-                // 所有人都已行动且已匹配，进入下一阶段
+                // 所有人都已行动且已匹配，检查是否应该直接摊牌
+                const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
+                if (nonAllInPlayers.length <= 1) {
+                    // 只剩 0 或 1 个可以行动的玩家，直接发完牌摊牌
+                    while (gameState.communityCards.length < 5) {
+                        if (gameState.communityCards.length === 0) {
+                            gameState.communityCards = [
+                                gameState.deck.pop(),
+                                gameState.deck.pop(),
+                                gameState.deck.pop()
+                            ];
+                        } else {
+                            gameState.communityCards.push(gameState.deck.pop());
+                        }
+                    }
+                    gameState.phase = 'river';
+                    showdown();
+                    return;
+                }
+                // 进入下一阶段
                 nextPhase();
                 return;
             }
@@ -983,8 +1002,9 @@
             }
             
             // 如果所有玩家都是 all in 或已弃牌，直接发完牌并摊牌
-            if (activePlayers.filter(p => !p.isAllIn).length <= 1) {
-                // 直接发完所有公共牌
+            const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
+            if (nonAllInPlayers.length === 0) {
+                // 所有人都 all in，直接发完牌并摊牌
                 while (gameState.communityCards.length < 5) {
                     if (gameState.communityCards.length === 0) {
                         gameState.communityCards = [
@@ -998,6 +1018,16 @@
                 }
                 gameState.phase = 'river';
                 showdown();
+            } else if (nonAllInPlayers.length === 1) {
+                // 只剩一个人可以行动，其他人都是 all in
+                // 这个人行动后直接进入摊牌
+                gameState.currentPlayerIndex = gameState.players.indexOf(nonAllInPlayers[0]);
+                updateDisplay();
+                updateControls();
+                
+                if (!nonAllInPlayers[0].isHuman) {
+                    setTimeout(aiTurn, 800);
+                }
             } else {
                 nextPhase();
             }
@@ -2009,7 +2039,8 @@
             updateControls();
             
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            if (!currentPlayer.isHuman && !currentPlayer.folded) {
+            // 只有非 all in 且有筹码的 AI 才需要自动行动
+            if (!currentPlayer.isHuman && !currentPlayer.folded && !currentPlayer.isAllIn && currentPlayer.chips > 0) {
                 setTimeout(aiTurn, 1000);
             }
         }
