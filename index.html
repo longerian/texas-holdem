@@ -770,7 +770,7 @@
                 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'zh-CN';
-                utterance.rate = 1.1;  // 稍快一点，更干脆
+                utterance.rate = 1.6;  // 提高速度，更干脆
                 utterance.pitch = 1.2; // 音调稍高，更明亮
                 utterance.volume = this.volume;
                 
@@ -1416,7 +1416,7 @@
             
             // 如果当前玩家是电脑，自动行动
             if (!currentPlayer.isHuman) {
-                setTimeout(aiTurn, 1000);
+                setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
             }
         }
         
@@ -1622,7 +1622,7 @@
                     updateControls();
                     
                     if (!nextPlayer.isHuman) {
-                        setTimeout(aiTurn, 800);
+                        setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
                     }
                     return;
                 }
@@ -2616,7 +2616,7 @@
                     updateDisplay();
                     nextPlayer();
                 }
-            }, 500);
+            }, 2000);  // 增加延迟，让语音播报完整
         }
         
         // 获取手牌类型（用于 GTO 策略）
@@ -2694,7 +2694,7 @@
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             // 只有非 all in 且有筹码的 AI 才需要自动行动
             if (!currentPlayer.isHuman && !currentPlayer.folded && !currentPlayer.isAllIn && currentPlayer.chips > 0) {
-                setTimeout(aiTurn, 1000);
+                setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
             }
         }
         
