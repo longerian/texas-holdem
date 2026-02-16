@@ -1025,31 +1025,125 @@
             return 0;
         }
         
-        // 获取 AI 玩家性格（每个 AI 有不同的风格）
+        // 获取 AI 玩家性格（职业选手风格）
         function getAIPlayerStyle(playerId) {
             const styles = [
-                { aggression: 0.7, bluffRate: 0.25, name: '激进型' },   // 电脑 1
-                { aggression: 0.4, bluffRate: 0.1, name: '保守型' },    // 电脑 2
-                { aggression: 0.6, bluffRate: 0.2, name: '平衡型' },    // 电脑 3
-                { aggression: 0.8, bluffRate: 0.35, name: '超激进型' }, // 电脑 4
-                { aggression: 0.3, bluffRate: 0.05, name: '紧凶型' }    // 电脑 5
+                { 
+                    aggression: 0.75, 
+                    bluffRate: 0.2, 
+                    cbetRate: 0.7,      // C-bet 频率
+                    foldTo3bet: 0.4,    // 面对 3-bet 弃牌率
+                    vpip: 0.22,         // 入池率（Voluntarily Put $ In Pot）
+                    pfr: 0.18,          // 翻牌前加注率
+                    name: 'TAG-Pro'     // 紧凶型职业
+                },
+                { 
+                    aggression: 0.5, 
+                    bluffRate: 0.08, 
+                    cbetRate: 0.5,
+                    foldTo3bet: 0.6,
+                    vpip: 0.15,
+                    pfr: 0.12,
+                    name: '岩石型'      // 超紧型
+                },
+                { 
+                    aggression: 0.7, 
+                    bluffRate: 0.15, 
+                    cbetRate: 0.65,
+                    foldTo3bet: 0.35,
+                    vpip: 0.25,
+                    pfr: 0.20,
+                    name: 'LAG-Pro'     // 松凶型职业
+                },
+                { 
+                    aggression: 0.85, 
+                    bluffRate: 0.3, 
+                    cbetRate: 0.8,
+                    foldTo3bet: 0.25,
+                    vpip: 0.35,
+                    pfr: 0.28,
+                    name: '超凶型'      // 超激进
+                },
+                { 
+                    aggression: 0.55, 
+                    bluffRate: 0.12, 
+                    cbetRate: 0.55,
+                    foldTo3bet: 0.5,
+                    vpip: 0.2,
+                    pfr: 0.15,
+                    name: '混合型'      // 平衡型职业
+                }
             ];
             return styles[(playerId - 1) % styles.length];
         }
         
-        // 计算位置优势（庄家位置最好）
+        // 计算位置优势（职业选手更重视位置）
         function getPositionAdvantage(playerIndex) {
             const dealerIndex = gameState.dealerIndex;
             const distance = (playerIndex - dealerIndex + NUM_PLAYERS) % NUM_PLAYERS;
-            // 越靠近庄家越好，返回 0-1
-            return 1 - (distance / NUM_PLAYERS);
+            // 庄家位置优势最大
+            if (distance === 0) return 1.0;
+            // 关位（庄家右边）也很好
+            if (distance === NUM_PLAYERS - 1) return 0.85;
+            // 前位较差
+            return 0.5 + (1 - distance / NUM_PLAYERS) * 0.3;
+        }
+        
+        // 判断是否应该 C-bet（持续下注）
+        function shouldCBet(player, boardTexture) {
+            const style = getAIPlayerStyle(player.id);
+            // 翻牌后，如果翻牌前加注了，考虑 C-bet
+            // 干燥牌面（无连牌、无同花可能）更容易 C-bet
+            return Math.random() < style.cbetRate * (boardTexture === 'dry' ? 1.2 : 0.8);
+        }
+        
+        // 分析公共牌面结构
+        function analyzeBoardTexture() {
+            if (gameState.communityCards.length < 3) return 'unknown';
+            
+            const cards = gameState.communityCards;
+            const suits = cards.map(c => c.suit);
+            const ranks = cards.map(c => ranks.indexOf(c.rank));
+            
+            // 检查同花可能
+            const suitCounts = {};
+            suits.forEach(s => suitCounts[s] = (suitCounts[s] || 0) + 1);
+            const hasFlushDraw = Object.values(suitCounts).some(c => c >= 3);
+            
+            // 检查顺子可能
+            const sortedRanks = [...new Set(ranks)].sort((a, b) => a - b);
+            let hasStraightDraw = false;
+            for (let i = 0; i < sortedRanks.length - 2; i++) {
+                if (sortedRanks[i + 2] - sortedRanks[i] <= 4) {
+                    hasStraightDraw = true;
+                    break;
+                }
+            }
+            
+            // 湿牌面（很多听牌）vs 干牌面
+            if (hasFlushDraw || hasStraightDraw) return 'wet';
+            return 'dry';
+        }
+        
+        // 计算隐含赔率（考虑后续可能赢到的筹码）
+        function getImpliedOdds(toCall, player) {
+            const remainingChips = gameState.players
+                .filter(p => !p.folded && p.id !== player.id)
+                .reduce((sum, p) => sum + p.chips, 0);
+            // 如果对手筹码多，隐含赔率好
+            return Math.min(remainingChips / (toCall || 1), 5);
         }
         
         // 计算底池赔率
         function getPotOdds(toCall) {
             if (toCall === 0) return 1;
-            const potOdds = toCall / (gameState.pot + toCall);
-            return potOdds;
+            return toCall / (gameState.pot + toCall);
+        }
+        
+        // 判断是否面对 3-bet（有人对加注再加注）
+        function isFacing3Bet() {
+            // 如果当前下注远大于大盲注，说明有 3-bet
+            return gameState.currentBet > gameState.bigBlind * 3;
         }
         
         // AI 回合
@@ -1064,9 +1158,12 @@
             const style = getAIPlayerStyle(player.id);
             const positionAdv = getPositionAdvantage(player.id);
             const potOdds = getPotOdds(toCall);
+            const boardTexture = analyzeBoardTexture();
+            const impliedOdds = getImpliedOdds(toCall, player);
+            const facing3bet = isFacing3Bet();
             
-            // 综合评分（考虑手牌、位置、性格）
-            const effectiveStrength = handStrength * (0.7 + positionAdv * 0.3);
+            // 综合评分（职业选手更重视位置）
+            const effectiveStrength = handStrength * (0.6 + positionAdv * 0.4);
             
             let decision;
             if (player.chips <= 0) {
@@ -1074,83 +1171,140 @@
                 return;
             }
             
-            // 计算跟注成本占总筹码的比例
+            // 跟注成本占总筹码的比例
             const callCost = toCall / player.chips;
+            // 底池相对于筹码的比例
+            const spr = (gameState.pot + toCall) / player.chips; // Stack-to-Pot Ratio
             
-            // 翻牌前策略
+            // 翻牌前策略（职业级别）
             if (gameState.phase === 'preflop') {
                 const preflopStrength = getPreflopStrength(player.hand);
                 
-                if (toCall === 0) {
-                    // 没人下注
-                    if (preflopStrength > 0.6 && Math.random() < style.aggression) {
-                        decision = 'raise';
-                    } else if (preflopStrength > 0.3 || Math.random() < style.bluffRate) {
-                        decision = 'check';
-                        if (Math.random() < style.bluffRate * 0.5) {
-                            decision = 'raise'; // 偶尔诈唬加注
+                // 面对加注
+                if (toCall > 0) {
+                    // 面对 3-bet
+                    if (facing3bet) {
+                        if (preflopStrength > 0.85) {
+                            // QQ+ 可以 4-bet 或 all-in
+                            decision = Math.random() < style.aggression ? 'raise' : 'call';
+                        } else if (preflopStrength > 0.65) {
+                            // JJ, TT, AK 跟注
+                            decision = Math.random() < style.foldTo3bet ? 'fold' : 'call';
+                        } else {
+                            // 弃牌
+                            decision = 'fold';
                         }
                     } else {
-                        decision = 'check';
+                        // 面对普通加注
+                        if (preflopStrength > 0.75) {
+                            // 强牌 3-bet
+                            decision = Math.random() < style.aggression ? 'raise' : 'call';
+                        } else if (preflopStrength > 0.55) {
+                            // 中等牌根据位置决定
+                            if (positionAdv > 0.7) {
+                                decision = Math.random() < 0.3 ? 'raise' : 'call';
+                            } else {
+                                decision = 'call';
+                            }
+                        } else if (preflopStrength > 0.35 && callCost < 0.08) {
+                            // 投机牌（小对子、同花连牌）看隐含赔率
+                            decision = impliedOdds > 2 ? 'call' : 'fold';
+                        } else if (callCost < 0.03 && positionAdv > 0.8) {
+                            // 庄家位置可以宽一点
+                            decision = Math.random() < 0.6 ? 'call' : 'fold';
+                        } else {
+                            decision = 'fold';
+                        }
                     }
                 } else {
-                    // 有人下注
-                    if (preflopStrength > 0.7) {
-                        decision = Math.random() < style.aggression ? 'raise' : 'call';
-                    } else if (preflopStrength > 0.5 && callCost < 0.15) {
-                        decision = Math.random() < style.aggression * 0.5 ? 'raise' : 'call';
-                    } else if (preflopStrength > 0.35 && callCost < 0.1) {
-                        decision = 'call';
-                    } else if (callCost < 0.05 && Math.random() < style.bluffRate) {
-                        decision = 'call'; // 小注跟一下看牌
+                    // 没人加注，决定是否 open raise
+                    if (preflopStrength > 0.5) {
+                        decision = Math.random() < style.pfr * (1 + positionAdv * 0.5) ? 'raise' : 'check';
+                    } else if (preflopStrength > 0.3 && positionAdv > 0.7) {
+                        // 好位置可以偷盲
+                        decision = Math.random() < style.bluffRate ? 'raise' : 'check';
                     } else {
-                        decision = 'fold';
+                        decision = 'check';
                     }
                 }
             } else {
-                // 翻牌后策略
-                if (effectiveStrength > 0.75) {
-                    // 强牌：大部分加注
+                // 翻牌后策略（职业级别）
+                const isRaiser = player.bet > 0 || gameState.lastRaisePlayerIndex === player.id;
+                
+                if (effectiveStrength > 0.8) {
+                    // 超强牌（Set、两对以上）：慢打或快打
                     if (toCall === 0) {
+                        // 有时候慢打
+                        decision = Math.random() < 0.7 ? 'raise' : 'check';
+                    } else if (callCost > 0.3) {
+                        decision = 'raise'; // 大注直接加注
+                    } else {
+                        decision = Math.random() < 0.5 ? 'raise' : 'call'; // 混合策略
+                    }
+                } else if (effectiveStrength > 0.6) {
+                    // 强牌（顶对好踢脚、超对）
+                    if (toCall === 0) {
+                        // C-bet 或价值下注
                         decision = 'raise';
-                    } else if (toCall >= player.chips) {
-                        decision = 'allin';
+                    } else if (callCost < 0.25) {
+                        decision = Math.random() < 0.4 ? 'raise' : 'call';
+                    } else if (boardTexture === 'wet' && callCost < 0.4) {
+                        decision = 'call'; // 湿牌面控池
                     } else {
-                        decision = Math.random() < 0.7 ? 'raise' : 'call';
+                        decision = Math.random() < potOdds * 2 ? 'call' : 'fold';
                     }
-                } else if (effectiveStrength > 0.5) {
-                    // 中等牌
+                } else if (effectiveStrength > 0.4) {
+                    // 中等牌（中对、底对）
                     if (toCall === 0) {
-                        decision = Math.random() < style.aggression ? 'raise' : 'check';
-                    } else if (callCost < 0.2) {
-                        decision = Math.random() < style.aggression * 0.3 ? 'raise' : 'call';
-                    } else if (callCost < 0.4) {
+                        // 可以诈唬或过牌
+                        if (isRaiser && shouldCBet(player, boardTexture)) {
+                            decision = 'raise';
+                        } else {
+                            decision = Math.random() < style.bluffRate ? 'raise' : 'check';
+                        }
+                    } else if (callCost < 0.15 && boardTexture === 'dry') {
                         decision = 'call';
-                    } else {
-                        decision = Math.random() < potOdds ? 'call' : 'fold';
-                    }
-                } else if (effectiveStrength > 0.3) {
-                    // 弱牌
-                    if (toCall === 0) {
-                        decision = Math.random() < style.bluffRate ? 'raise' : 'check';
-                    } else if (callCost < 0.1) {
-                        decision = 'call';
+                    } else if (callCost < 0.08) {
+                        decision = Math.random() < 0.6 ? 'call' : 'fold';
                     } else {
                         decision = 'fold';
                     }
+                } else if (effectiveStrength > 0.25) {
+                    // 弱牌（听牌）
+                    const drawStrength = evaluateDrawStrength(player.hand, gameState.communityCards);
+                    if (drawStrength > 0.5) {
+                        // 好听牌：半诈唬
+                        if (toCall === 0) {
+                            decision = Math.random() < style.aggression * 0.6 ? 'raise' : 'check';
+                        } else if (potOdds < drawStrength) {
+                            decision = 'call';
+                        } else {
+                            decision = Math.random() < impliedOdds * 0.2 ? 'call' : 'fold';
+                        }
+                    } else {
+                        // 弱听牌
+                        if (toCall === 0) {
+                            decision = Math.random() < style.bluffRate * 0.5 ? 'raise' : 'check';
+                        } else {
+                            decision = 'fold';
+                        }
+                    }
                 } else {
-                    // 很弱的牌
+                    // 空气牌：纯诈唬
                     if (toCall === 0) {
-                        decision = Math.random() < style.bluffRate ? 'raise' : 'check';
+                        // 选好时机诈唬：好位置 + 干牌面
+                        const bluffCondition = positionAdv > 0.6 && boardTexture === 'dry';
+                        decision = (Math.random() < style.bluffRate && bluffCondition) ? 'raise' : 'check';
                     } else {
                         decision = 'fold';
                     }
                 }
             }
             
-            // All in 的情况
+            // All in 决策
             if (toCall >= player.chips && decision !== 'fold') {
-                if (effectiveStrength > 0.5 || Math.random() < style.aggression * 0.3) {
+                // 职业选手更谨慎
+                if (effectiveStrength > 0.55 || (handStrength > 0.4 && spr < 2)) {
                     decision = 'allin';
                 } else {
                     decision = 'fold';
@@ -1207,24 +1361,48 @@
                         gameState.actedThisRound.push(playerIndex);
                     }
                     
-                    // 更智能的加注金额计算
+                    // 职业级别的加注金额计算
                     let raiseSize;
-                    if (effectiveStrength > 0.7) {
-                        // 强牌：大加注（底池的 2/3 到 1 倍）
-                        raiseSize = Math.floor(gameState.pot * (0.6 + Math.random() * 0.4));
-                    } else if (effectiveStrength > 0.5) {
-                        // 中等牌：中等加注（底池的 1/2 到 2/3）
-                        raiseSize = Math.floor(gameState.pot * (0.4 + Math.random() * 0.3));
+                    
+                    if (gameState.phase === 'preflop') {
+                        // 翻牌前加注
+                        if (toCall > 0) {
+                            // 3-bet：原加注的 3 倍 + 底池
+                            raiseSize = Math.floor(gameState.currentBet * 3 + gameState.pot * 0.5);
+                        } else {
+                            // Open raise：根据位置调整
+                            const baseRaise = gameState.bigBlind * (2 + positionAdv * 2);
+                            raiseSize = Math.floor(baseRaise * (0.8 + Math.random() * 0.4));
+                        }
                     } else {
-                        // 诈唬：小加注（底池的 1/3 到 1/2）
-                        raiseSize = Math.floor(gameState.pot * (0.3 + Math.random() * 0.2));
+                        // 翻牌后下注
+                        const pot = gameState.pot;
+                        
+                        if (effectiveStrength > 0.75) {
+                            // 强牌价值下注：2/3 到 1 底池
+                            raiseSize = Math.floor(pot * (0.66 + Math.random() * 0.34));
+                        } else if (effectiveStrength > 0.5) {
+                            // 中等牌：1/2 到 2/3 底池
+                            raiseSize = Math.floor(pot * (0.5 + Math.random() * 0.2));
+                        } else if (effectiveStrength > 0.3) {
+                            // 薄价值或 C-bet：1/3 到 1/2 底池
+                            raiseSize = Math.floor(pot * (0.33 + Math.random() * 0.17));
+                        } else {
+                            // 诈唬：小注（1/4 到 1/3 底池）
+                            raiseSize = Math.floor(pot * (0.25 + Math.random() * 0.1));
+                        }
+                        
+                        // 湿牌面下注更大（保护手牌）
+                        if (boardTexture === 'wet' && effectiveStrength > 0.5) {
+                            raiseSize = Math.floor(raiseSize * 1.2);
+                        }
                     }
                     
-                    // 确保至少是最小加注（取整）
+                    // 确保至少是最小加注
                     const minRaise = Math.floor(Math.max(gameState.currentBet + 10, gameState.pot * 0.5));
                     raiseSize = Math.floor(Math.max(raiseSize, minRaise));
                     
-                    // 不能超过玩家筹码（取整）
+                    // 不能超过玩家筹码
                     const raiseAmount = Math.floor(Math.min(raiseSize, player.chips + player.bet));
                     const toCallNew = raiseAmount - player.bet;
                     
@@ -1426,6 +1604,46 @@
             }
             
             return Math.min(1, Math.max(0, strength));
+        }
+        
+        // 评估听牌强度（听同花、听顺子）
+        function evaluateDrawStrength(hand, community) {
+            if (community.length === 0) return 0;
+            
+            const allCards = [...hand, ...community];
+            
+            // 听同花
+            const suitCounts = {};
+            allCards.forEach(card => {
+                suitCounts[card.suit] = (suitCounts[card.suit] || 0) + 1;
+            });
+            const flushDraw = Object.values(suitCounts).filter(c => c === 4).length > 0;
+            
+            // 听顺子（两头顺或卡顺）
+            const rankValues = allCards.map(card => ranks.indexOf(card.rank));
+            const uniqueRanks = [...new Set(rankValues)].sort((a, b) => a - b);
+            
+            let openEnded = false;  // 两头顺
+            let gutShot = false;    // 卡顺
+            
+            for (let i = 0; i <= uniqueRanks.length - 4; i++) {
+                const gap = uniqueRanks[i + 3] - uniqueRanks[i];
+                if (gap === 3) openEnded = true;       // 如 5-6-7-8
+                else if (gap === 4) gutShot = true;    // 如 5-6-8-9
+            }
+            
+            // 计算听牌价值
+            let drawStrength = 0;
+            if (flushDraw) drawStrength += 0.5;  // 同花听牌约 35% 成功率
+            if (openEnded) drawStrength += 0.4;  // 两头顺约 32% 成功率
+            if (gutShot) drawStrength += 0.2;    // 卡顺约 16% 成功率
+            
+            // 组合听牌（同花+顺子）更强
+            if (flushDraw && (openEnded || gutShot)) {
+                drawStrength += 0.2;
+            }
+            
+            return Math.min(1, drawStrength);
         }
         
         // 评估手牌强度 (简化版)
