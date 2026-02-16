@@ -453,6 +453,64 @@
             width: 80px;
             cursor: pointer;
         }
+        
+        /* 存档选择样式 */
+        .save-controls {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .save-info {
+            color: #95a5a6;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+        }
+        
+        .save-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .save-btn.new-game {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .save-btn.continue {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .save-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        .save-status {
+            color: #4CAF50;
+            font-size: 0.8em;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .save-status.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -503,9 +561,18 @@
             </div>
         </div>
         
-        <div class="message" id="message">点击"开始游戏"开始新的一局</div>
+        <div class="message" id="message">选择新建游戏或继续游戏</div>
         
-        <div class="controls" id="gameControls">
+        <!-- 存档选择面板 -->
+        <div class="save-controls" id="saveControls">
+            <div class="save-info" id="saveInfo">没有找到存档</div>
+            <button class="save-btn new-game" onclick="newGame()">🎮 新建游戏</button>
+            <button class="save-btn continue" id="continueBtn" onclick="loadGame()" disabled>📂 继续游戏</button>
+            <div class="save-status" id="saveStatus">✓ 游戏已自动保存</div>
+        </div>
+        
+        <!-- 游戏控制面板（游戏进行中显示） -->
+        <div class="controls" id="gameControls" style="display: none;">
             <div class="controls-row">
                 <button class="new-game" onclick="startNewGame()">开始游戏</button>
             </div>
@@ -513,6 +580,166 @@
     </div>
     
     <script>
+        // ==================== 存档系统 ====================
+        class SaveSystem {
+            constructor() {
+                this.storageKey = 'texas_holdem_save';
+                this.autoSaveInterval = null;
+            }
+            
+            // 保存游戏
+            save() {
+                const saveData = {
+                    players: gameState.players,
+                    dealerIndex: gameState.dealerIndex,
+                    timestamp: Date.now(),
+                    version: '1.0'
+                };
+                
+                try {
+                    localStorage.setItem(this.storageKey, JSON.stringify(saveData));
+                    this.showSaveStatus();
+                    return true;
+                } catch (error) {
+                    console.error('保存失败:', error);
+                    return false;
+                }
+            }
+            
+            // 加载游戏
+            load() {
+                try {
+                    const saveData = localStorage.getItem(this.storageKey);
+                    if (saveData) {
+                        const data = JSON.parse(saveData);
+                        gameState.players = data.players;
+                        gameState.dealerIndex = data.dealerIndex;
+                        gameState.playersInitialized = true;
+                        return true;
+                    }
+                } catch (error) {
+                    console.error('加载失败:', error);
+                }
+                return false;
+            }
+            
+            // 检查是否有存档
+            hasSave() {
+                return localStorage.getItem(this.storageKey) !== null;
+            }
+            
+            // 获取存档信息
+            getSaveInfo() {
+                try {
+                    const saveData = localStorage.getItem(this.storageKey);
+                    if (saveData) {
+                        const data = JSON.parse(saveData);
+                        const playerChips = data.players[0].chips;
+                        const date = new Date(data.timestamp);
+                        return {
+                            playerChips: playerChips,
+                            saveTime: date.toLocaleString('zh-CN')
+                        };
+                    }
+                } catch (error) {
+                    console.error('获取存档信息失败:', error);
+                }
+                return null;
+            }
+            
+            // 删除存档
+            deleteSave() {
+                localStorage.removeItem(this.storageKey);
+            }
+            
+            // 显示保存状态
+            showSaveStatus() {
+                const status = document.getElementById('saveStatus');
+                status.classList.add('show');
+                setTimeout(() => {
+                    status.classList.remove('show');
+                }, 2000);
+            }
+            
+            // 启动自动保存
+            startAutoSave() {
+                // 每30秒自动保存一次
+                this.autoSaveInterval = setInterval(() => {
+                    if (gameState.gameActive) {
+                        this.save();
+                    }
+                }, 30000);
+            }
+            
+            // 停止自动保存
+            stopAutoSave() {
+                if (this.autoSaveInterval) {
+                    clearInterval(this.autoSaveInterval);
+                    this.autoSaveInterval = null;
+                }
+            }
+        }
+        
+        // 创建全局存档实例
+        const saveSystem = new SaveSystem();
+        
+        // 新建游戏
+        function newGame() {
+            // 删除旧存档
+            saveSystem.deleteSave();
+            // 初始化新游戏
+            resetGame();
+            // 显示游戏控制面板
+            document.getElementById('saveControls').style.display = 'none';
+            document.getElementById('gameControls').style.display = 'block';
+            // 启动自动保存
+            saveSystem.startAutoSave();
+        }
+        
+        // 加载游戏
+        function loadGame() {
+            if (saveSystem.load()) {
+                // 显示游戏控制面板
+                document.getElementById('saveControls').style.display = 'none';
+                document.getElementById('gameControls').style.display = 'block';
+                // 显示加载成功消息
+                setMessage('游戏已加载！点击"开始游戏"继续');
+                updateDisplay();
+                // 启动自动保存
+                saveSystem.startAutoSave();
+            } else {
+                setMessage('加载失败，请开始新游戏');
+            }
+        }
+        
+        // 初始化存档选择界面
+        function initSaveSelection() {
+            const saveInfo = document.getElementById('saveInfo');
+            const continueBtn = document.getElementById('continueBtn');
+            
+            if (saveSystem.hasSave()) {
+                const info = saveSystem.getSaveInfo();
+                if (info) {
+                    saveInfo.textContent = `存档: 筹码 ${info.playerChips} | 保存时间: ${info.saveTime}`;
+                    continueBtn.disabled = false;
+                }
+            } else {
+                saveInfo.textContent = '没有找到存档';
+                continueBtn.disabled = true;
+            }
+        }
+        
+        // 页面加载时初始化
+        window.addEventListener('load', () => {
+            initSaveSelection();
+            
+            // 初始化语音系统
+            if ('speechSynthesis' in window) {
+                // 确保语音列表已加载
+                window.speechSynthesis.getVoices();
+            }
+        });
+        
         // ==================== 音效系统 ====================
         class SoundSystem {
             constructor() {
@@ -2547,6 +2774,9 @@
             
             updateDisplay();
             updateControls();
+            
+            // 自动保存
+            saveSystem.save();
         }
         
         // 结束一局
@@ -2560,6 +2790,9 @@
             
             updateDisplay();
             updateControls();
+            
+            // 自动保存
+            saveSystem.save();
         }
         
         // 评估翻牌前手牌强度
