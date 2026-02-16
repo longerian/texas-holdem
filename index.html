@@ -1515,16 +1515,16 @@
             if (gameState.communityCards.length < 3) return 'unknown';
             
             const cards = gameState.communityCards;
-            const suits = cards.map(c => c.suit);
-            const ranks = cards.map(c => ranks.indexOf(c.rank));
+            const cardSuits = cards.map(c => c.suit);
+            const cardRanks = cards.map(c => ranks.indexOf(c.rank));
             
             // 检查同花可能
             const suitCounts = {};
-            suits.forEach(s => suitCounts[s] = (suitCounts[s] || 0) + 1);
+            cardSuits.forEach(s => suitCounts[s] = (suitCounts[s] || 0) + 1);
             const hasFlushDraw = Object.values(suitCounts).some(c => c >= 3);
             
             // 检查顺子可能
-            const sortedRanks = [...new Set(ranks)].sort((a, b) => a - b);
+            const sortedRanks = [...new Set(cardRanks)].sort((a, b) => a - b);
             let hasStraightDraw = false;
             for (let i = 0; i < sortedRanks.length - 2; i++) {
                 if (sortedRanks[i + 2] - sortedRanks[i] <= 4) {
