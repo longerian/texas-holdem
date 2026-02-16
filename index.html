@@ -1220,12 +1220,12 @@
                         raiseSize = Math.floor(gameState.pot * (0.3 + Math.random() * 0.2));
                     }
                     
-                    // 确保至少是最小加注
-                    const minRaise = Math.max(gameState.currentBet + 10, gameState.pot * 0.5);
-                    raiseSize = Math.max(raiseSize, minRaise);
+                    // 确保至少是最小加注（取整）
+                    const minRaise = Math.floor(Math.max(gameState.currentBet + 10, gameState.pot * 0.5));
+                    raiseSize = Math.floor(Math.max(raiseSize, minRaise));
                     
-                    // 不能超过玩家筹码
-                    const raiseAmount = Math.min(raiseSize, player.chips + player.bet);
+                    // 不能超过玩家筹码（取整）
+                    const raiseAmount = Math.floor(Math.min(raiseSize, player.chips + player.bet));
                     const toCallNew = raiseAmount - player.bet;
                     
                     if (toCallNew >= player.chips) {
