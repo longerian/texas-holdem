@@ -1298,10 +1298,10 @@
             else if (stats.bluffFreq < 0.1) bluffProbability -= 0.1;
             
             // 因素2：下注大小异常
-            const potSizedBet = betSize / gameState.pot;
-            if (potSizedBet > 1.5 && gameState.phase === 'river') {
+            const potSizedBet = gameState.pot > 0 ? betSize / gameState.pot : 0;
+            if (potSizedBet > 1.5 && gameState.phase === 'river' && track) {
                 // 河牌超大注：可能是价值也可能是诈唬
-                bluffProbability += track && track.riverBluffs > 2 ? 0.15 : 0.05;
+                bluffProbability += track.riverBluffs > 2 ? 0.15 : 0.05;
             } else if (potSizedBet < 0.4 && gameState.phase !== 'preflop') {
                 // 小注：通常不是诈唬
                 bluffProbability -= 0.1;
@@ -1341,7 +1341,7 @@
         
         // 规划后续街的策略
         function planMultiStreet(player, currentStrength, boardTexture) {
-            const spr = player.chips / (gameState.pot || 1);
+            const spr = player.chips > 0 ? player.chips / Math.max(1, gameState.pot) : 0;
             const plan = {
                 current: null,
                 turnPlan: null,
@@ -1448,7 +1448,7 @@
             } else if (handRank.rank === 2) {
                 // 一对
                 const pairRank = Object.keys(rankCounts).find(r => rankCounts[r] === 2);
-                const pairValue = ranks.indexOf(pairRank);
+                const pairValue = pairRank ? ranks.indexOf(pairRank) : 0;
                 if (pairValue >= 11) {
                     tier = 2;
                     detail = 'top_pair';
@@ -1575,7 +1575,7 @@
             const boardTexture = analyzeBoardTexture();
             const impliedOdds = getImpliedOdds(toCall, player);
             const facing3bet = isFacing3Bet();
-            const spr = player.chips / (gameState.pot || 1);
+            const spr = player.chips > 0 ? player.chips / Math.max(1, gameState.pot) : 0;
             
             // 分析活跃对手
             const activeOpponents = gameState.players.filter(p => !p.folded && p.id !== player.id);
@@ -1604,7 +1604,7 @@
             }
             
             // 跟注成本占总筹码的比例
-            const callCost = toCall / player.chips;
+            const callCost = player.chips > 0 ? toCall / player.chips : 1;
             
             // ===== GTO 混合策略辅助函数 =====
             function gtoDecision(handType, situation) {
