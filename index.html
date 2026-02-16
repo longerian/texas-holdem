@@ -467,9 +467,9 @@
             smallBlind: 5,
             bigBlind: 10,
             dealerIndex: 0,
-            playersInitialized: false, // 标记玩家是否已初始化
-            lastRaisePlayerIndex: -1,  // 记录最后一次加注的玩家索引
-            bettingRoundComplete: false // 标记当前下注轮次是否完成
+            playersInitialized: false,
+            roundStartPlayerIndex: -1,  // 记录当前轮次的起始玩家
+            actedThisRound: []  // 记录本轮已经行动过的玩家索引
         };
         
         const suits = ['♠', '♥', '♦', '♣'];
@@ -744,6 +744,8 @@
             gameState.phase = 'preflop';
             gameState.dealerIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
+            gameState.actedThisRound = [];  // 重置行动记录
+            gameState.bigBlindIndex = -1;  // 将在设置盲注后更新
             
             // 找到有筹码的玩家
             let dealerPlayer = gameState.players[gameState.dealerIndex];
@@ -783,6 +785,7 @@
             
             gameState.pot = actualSmallBlind + actualBigBlind;
             gameState.currentBet = actualBigBlind;
+            gameState.bigBlindIndex = bigBlindIndex;  // 记录大盲注玩家索引
             
             // 从大盲注后开始
             gameState.currentPlayerIndex = (bigBlindIndex + 1) % NUM_PLAYERS;
@@ -808,14 +811,19 @@
             const player = gameState.players[0];
             const toCall = gameState.currentBet - player.bet;
             
-            // 检查是否可以过牌
             if (toCall > 0) {
                 console.error('错误：不能过牌，需要支付', toCall);
                 setMessage('错误：不能过牌，需要跟注 ' + toCall);
                 return;
             }
             
+            // 标记玩家已行动
+            if (!gameState.actedThisRound.includes(0)) {
+                gameState.actedThisRound.push(0);
+            }
+            
             setMessage('你选择过牌');
+            updateDisplay();
             nextPlayer();
         }
         
@@ -823,20 +831,22 @@
             const player = gameState.players[0];
             const toCall = gameState.currentBet - player.bet;
             
-            // 如果需要跟注的金额大于等于筹码，则 all in
+            // 标记玩家已行动
+            if (!gameState.actedThisRound.includes(0)) {
+                gameState.actedThisRound.push(0);
+            }
+            
             if (toCall >= player.chips) {
-                // All in：筹码不足，推入所有剩余筹码
+                // All in
                 const allInAmount = player.chips;
                 gameState.pot += allInAmount;
-                player.bet += allInAmount;  // 玩家的实际下注
+                player.bet += allInAmount;
                 player.chips = 0;
                 player.isAllIn = true;
-                // 注意：currentBet 不变，因为 all in 金额可能小于 currentBet
                 setMessage(`你 All in! (${player.bet} 筹码)`);
             } else {
-                // 正常跟注：支付差额
                 player.chips -= toCall;
-                player.bet = gameState.currentBet;  // 匹配当前下注
+                player.bet = gameState.currentBet;
                 gameState.pot += toCall;
                 setMessage(`你跟注 ${toCall} 筹码`);
             }
@@ -850,38 +860,39 @@
             const raiseAmount = parseInt(document.getElementById('raiseSlider').value);
             const toCall = raiseAmount - player.bet;
             
-            // 验证加注金额
             const minRaise = gameState.currentBet + 10;
             if (raiseAmount < minRaise) {
-                console.error('错误：加注金额太小，至少需要', minRaise);
                 setMessage(`错误：加注金额至少需要 ${minRaise}`);
                 return;
             }
             
             if (raiseAmount > player.chips + player.bet) {
-                console.error('错误：加注金额超过筹码');
                 setMessage('错误：加注金额超过你的筹码');
                 return;
             }
             
-            // 如果需要支付的金额大于等于筹码，则 all in
+            // 标记玩家已行动
+            if (!gameState.actedThisRound.includes(0)) {
+                gameState.actedThisRound.push(0);
+            }
+            
             if (toCall >= player.chips) {
-                // All in：筹码不足，推入所有剩余筹码
+                // All in
                 const allInAmount = player.chips;
                 gameState.pot += allInAmount;
-                player.bet += allInAmount;  // 玩家的实际下注
+                player.bet += allInAmount;
                 player.chips = 0;
                 player.isAllIn = true;
-                // 只有在 all in 金额大于当前下注时才更新 currentBet
                 gameState.currentBet = Math.max(gameState.currentBet, player.bet);
                 setMessage(`你 All in! (${player.bet} 筹码)`);
             } else {
-                // 正常加注：支付差额，设置新的当前下注
+                // 正常加注
                 player.chips -= toCall;
-                player.bet = raiseAmount;  // 新的总下注
-                gameState.currentBet = raiseAmount;  // 更新当前下注
+                player.bet = raiseAmount;
+                gameState.currentBet = raiseAmount;
                 gameState.pot += toCall;
-                gameState.lastRaisePlayerIndex = 0;  // 记录加注者（玩家索引0）
+                // 加注后，清空已行动列表（所有人需要重新对新的下注做出反应）
+                gameState.actedThisRound = [0];  // 保留当前加注者
                 setMessage(`你加注到 ${raiseAmount} 筹码`);
             }
             
@@ -893,6 +904,12 @@
         function playerFold() {
             const player = gameState.players[0];
             player.folded = true;
+            
+            // 标记玩家已行动（弃牌也算行动）
+            if (!gameState.actedThisRound.includes(0)) {
+                gameState.actedThisRound.push(0);
+            }
+            
             setMessage('你弃牌了');
             updateDisplay();
             nextPlayer();
@@ -907,24 +924,34 @@
                 return;
             }
             
-            // 检查是否所有活跃玩家都已匹配当前下注
+            // 检查下注轮次是否结束
+            // 条件：所有活跃玩家都已匹配当前下注，且都已行动过（除了 all in 的）
+            // 翻牌前特殊处理：大盲注玩家如果没有被加注，还有一次行动机会
+            const allActed = activePlayers.every(p => 
+                p.isAllIn || gameState.actedThisRound.includes(p.id)
+            );
+            
             const allMatched = activePlayers.every(p => 
                 p.isAllIn || p.bet === gameState.currentBet
             );
             
-            // 如果有人加注，检查是否轮回到加注者
-            if (allMatched) {
-                if (gameState.lastRaisePlayerIndex >= 0) {
-                    // 有人加注过，必须轮回到加注者才能进入下一阶段
-                    // 这里不进入下一阶段，继续让其他玩家行动
-                } else {
-                    // 没人加注，所有人都已匹配，进入下一阶段
-                    nextPhase();
-                    return;
-                }
+            // 翻牌前检查大盲注玩家是否还有行动机会
+            const isPreflop = gameState.phase === 'preflop';
+            const bigBlindPlayer = gameState.players[gameState.bigBlindIndex];
+            const bigBlindHasOption = isPreflop && 
+                                       bigBlindPlayer && 
+                                       !bigBlindPlayer.folded && 
+                                       !bigBlindPlayer.isAllIn &&
+                                       !gameState.actedThisRound.includes(gameState.bigBlindIndex) &&
+                                       bigBlindPlayer.bet === gameState.currentBet;
+            
+            if (allActed && allMatched && !bigBlindHasOption) {
+                // 所有人都已行动且已匹配，进入下一阶段
+                nextPhase();
+                return;
             }
             
-            // 找到下一个需要行动的玩家（未弃牌且未 all in）
+            // 找到下一个需要行动的玩家
             let nextIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
             let attempts = 0;
             
@@ -933,13 +960,6 @@
                 
                 // 跳过已弃牌或已 all in 的玩家
                 if (!nextPlayer.folded && !nextPlayer.isAllIn) {
-                    // 检查是否应该进入下一阶段
-                    if (allMatched && gameState.lastRaisePlayerIndex >= 0 && nextIndex === gameState.lastRaisePlayerIndex) {
-                        // 轮回到加注者，且所有人都已匹配，进入下一阶段
-                        nextPhase();
-                        return;
-                    }
-                    
                     gameState.currentPlayerIndex = nextIndex;
                     updateDisplay();
                     updateControls();
@@ -954,25 +974,21 @@
                 attempts++;
             }
             
-            // 如果所有玩家都是 all in 或已弃牌，进入摊牌
+            // 如果所有玩家都是 all in 或已弃牌，直接发完牌并摊牌
             if (activePlayers.filter(p => !p.isAllIn).length <= 1) {
-                // 直接进入摊牌
-                while (gameState.phase !== 'river') {
-                    if (gameState.phase === 'preflop') {
-                        gameState.phase = 'flop';
+                // 直接发完所有公共牌
+                while (gameState.communityCards.length < 5) {
+                    if (gameState.communityCards.length === 0) {
                         gameState.communityCards = [
                             gameState.deck.pop(),
                             gameState.deck.pop(),
                             gameState.deck.pop()
                         ];
-                    } else if (gameState.phase === 'flop') {
-                        gameState.phase = 'turn';
-                        gameState.communityCards.push(gameState.deck.pop());
-                    } else if (gameState.phase === 'turn') {
-                        gameState.phase = 'river';
+                    } else {
                         gameState.communityCards.push(gameState.deck.pop());
                     }
                 }
+                gameState.phase = 'river';
                 showdown();
             } else {
                 nextPhase();
@@ -980,8 +996,18 @@
         }
         
         function getFirstPlayerIndex() {
-            // 返回庄家后第一个活跃玩家的索引
+            // 返回庄家后第一个活跃玩家的索引（可以行动的玩家）
             let index = (gameState.dealerIndex + 1) % NUM_PLAYERS;
+            for (let i = 0; i < NUM_PLAYERS; i++) {
+                const player = gameState.players[index];
+                // 跳过已弃牌、已全押或没有筹码的玩家
+                if (!player.folded && !player.isAllIn && player.chips > 0) {
+                    return index;
+                }
+                index = (index + 1) % NUM_PLAYERS;
+            }
+            // 如果没有可行动的玩家，返回第一个未弃牌的玩家
+            index = (gameState.dealerIndex + 1) % NUM_PLAYERS;
             for (let i = 0; i < NUM_PLAYERS; i++) {
                 if (!gameState.players[index].folded) {
                     return index;
@@ -1001,16 +1027,13 @@
             const toCall = gameState.currentBet - player.bet;
             const handStrength = evaluateHandStrength(player.hand, gameState.communityCards);
             
-            // 简化的AI策略
             let decision;
             if (player.chips <= 0) {
-                // 筹码为0，跳过
                 nextPlayer();
                 return;
             }
             
             if (toCall >= player.chips) {
-                // 需要all in才能跟注
                 if (handStrength > 0.5 || Math.random() > 0.7) {
                     decision = 'allin';
                 } else {
@@ -1028,14 +1051,23 @@
                 decision = Math.random() > 0.3 ? 'fold' : 'call';
             }
             
+            // 标记玩家已行动
+            const playerIndex = gameState.currentPlayerIndex;
+            
             setTimeout(() => {
                 if (decision === 'check') {
+                    if (!gameState.actedThisRound.includes(playerIndex)) {
+                        gameState.actedThisRound.push(playerIndex);
+                    }
                     setMessage(`${player.name} 过牌`);
+                    updateDisplay();
                     nextPlayer();
                 } else if (decision === 'call') {
-                    // 检查是否需要 all in
+                    if (!gameState.actedThisRound.includes(playerIndex)) {
+                        gameState.actedThisRound.push(playerIndex);
+                    }
+                    
                     if (toCall >= player.chips) {
-                        // All in
                         const allInAmount = player.chips;
                         gameState.pot += allInAmount;
                         player.bet += allInAmount;
@@ -1043,7 +1075,6 @@
                         player.isAllIn = true;
                         setMessage(`${player.name} All in! (${player.bet} 筹码)`);
                     } else {
-                        // 正常跟注
                         player.chips -= toCall;
                         player.bet = gameState.currentBet;
                         gameState.pot += toCall;
@@ -1052,7 +1083,10 @@
                     updateDisplay();
                     nextPlayer();
                 } else if (decision === 'allin') {
-                    // All in
+                    if (!gameState.actedThisRound.includes(playerIndex)) {
+                        gameState.actedThisRound.push(playerIndex);
+                    }
+                    
                     const allInAmount = player.chips;
                     gameState.pot += allInAmount;
                     player.bet += allInAmount;
@@ -1063,6 +1097,10 @@
                     updateDisplay();
                     nextPlayer();
                 } else if (decision === 'raise' && player.chips > toCall) {
+                    if (!gameState.actedThisRound.includes(playerIndex)) {
+                        gameState.actedThisRound.push(playerIndex);
+                    }
+                    
                     const raiseAmount = Math.min(
                         gameState.currentBet + Math.floor(Math.random() * 30) + 10,
                         player.chips + player.bet
@@ -1070,7 +1108,6 @@
                     const toCallNew = raiseAmount - player.bet;
                     
                     if (toCallNew >= player.chips) {
-                        // All in instead of raise
                         const allInAmount = player.chips;
                         gameState.pot += allInAmount;
                         player.bet += allInAmount;
@@ -1079,18 +1116,21 @@
                         player.isAllIn = true;
                         setMessage(`${player.name} All in! (${player.bet} 筹码)`);
                     } else {
-                        // 正常加注
                         player.chips -= toCallNew;
                         player.bet = raiseAmount;
                         gameState.currentBet = raiseAmount;
                         gameState.pot += toCallNew;
-                        gameState.lastRaisePlayerIndex = gameState.currentPlayerIndex;  // 记录加注者
+                        // 加注后清空已行动列表
+                        gameState.actedThisRound = [playerIndex];
                         setMessage(`${player.name} 加注到 ${raiseAmount}`);
                     }
                     updateDisplay();
                     nextPlayer();
                 } else {
                     player.folded = true;
+                    if (!gameState.actedThisRound.includes(playerIndex)) {
+                        gameState.actedThisRound.push(playerIndex);
+                    }
                     setMessage(`${player.name} 弃牌`);
                     updateDisplay();
                     nextPlayer();
@@ -1106,6 +1146,7 @@
             });
             gameState.currentBet = 0;
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
+            gameState.actedThisRound = [];  // 重置行动记录
             
             if (gameState.phase === 'preflop') {
                 gameState.phase = 'flop';
@@ -1226,11 +1267,17 @@
             const uniqueRanks = [...new Set(rankValues)].sort((a, b) => b - a);
             
             let isStraight = false;
-            for (let i = 0; i < uniqueRanks.length - 4; i++) {
+            // 检查普通顺子
+            for (let i = 0; i <= uniqueRanks.length - 5; i++) {
                 if (uniqueRanks[i] - uniqueRanks[i + 4] === 4) {
                     isStraight = true;
                     break;
                 }
+            }
+            // 检查 A-2-3-4-5 特殊顺子（A=12, 2=0, 3=1, 4=2, 5=3）
+            if (!isStraight && uniqueRanks.includes(12) && uniqueRanks.includes(0) && 
+                uniqueRanks.includes(1) && uniqueRanks.includes(2) && uniqueRanks.includes(3)) {
+                isStraight = true;
             }
             
             const counts = Object.values(rankCounts).sort((a, b) => b - a);
