@@ -1284,107 +1284,108 @@
             };
         }
         
-        // 获取 AI 玩家性格（职业选手风格 - 更精细的 GTO 参数）
+        // 获取 AI 玩家性格（职业牌手风格 - 更强更聪明）
         function getAIPlayerStyle(playerId) {
             const styles = [
                 { 
-                    aggression: 0.75, 
-                    bluffRate: 0.2, 
-                    cbetRate: 0.7,
-                    foldTo3bet: 0.4,
-                    vpip: 0.22,
-                    pfr: 0.18,
-                    name: 'TAG-Pro',
-                    // GTO 混合策略频率
+                    // 职业TAG - 紧凶型职业牌手
+                    aggression: 0.82, 
+                    bluffRate: 0.28, 
+                    cbetRate: 0.78,
+                    foldTo3bet: 0.3,
+                    vpip: 0.26,
+                    pfr: 0.22,
+                    name: '职业TAG',
                     gto: {
-                        // 翻牌前 3-bet 混合
-                        aa: { raise: 0.8, call: 0.2 },      // AA: 80% 4-bet, 20% 慢打
-                        kk: { raise: 0.7, call: 0.3 },
-                        qq: { raise: 0.6, call: 0.4 },
-                        ak: { raise: 0.7, call: 0.3 },
-                        aq: { raise: 0.5, call: 0.5 },
-                        // 翻牌后价值下注频率
+                        aa: { raise: 0.85, call: 0.15 },
+                        kk: { raise: 0.8, call: 0.2 },
+                        qq: { raise: 0.7, call: 0.3 },
+                        ak: { raise: 0.75, call: 0.25 },
+                        aq: { raise: 0.6, call: 0.4 },
+                        valueBet: { raise: 0.8, check: 0.2 },
+                        bluff: { bluff: 0.65, check: 0.35 }
+                    },
+                    rangeWeights: { premium: 0.04, strong: 0.1, medium: 0.18, speculative: 0.22, weak: 0.46 }
+                },
+                { 
+                    // GTO机器人 - 理论最优策略
+                    aggression: 0.75, 
+                    bluffRate: 0.25, 
+                    cbetRate: 0.72,
+                    foldTo3bet: 0.32,
+                    vpip: 0.24,
+                    pfr: 0.2,
+                    name: 'GTO专家',
+                    gto: {
+                        aa: { raise: 0.8, call: 0.2 },
+                        kk: { raise: 0.75, call: 0.25 },
+                        qq: { raise: 0.65, call: 0.35 },
+                        ak: { raise: 0.72, call: 0.28 },
+                        aq: { raise: 0.58, call: 0.42 },
                         valueBet: { raise: 0.75, check: 0.25 },
-                        // 诈唬频率
                         bluff: { bluff: 0.6, check: 0.4 }
                     },
-                    rangeWeights: { premium: 0.03, strong: 0.08, medium: 0.15, speculative: 0.2, weak: 0.54 }
+                    rangeWeights: { premium: 0.035, strong: 0.09, medium: 0.16, speculative: 0.21, weak: 0.505 }
                 },
                 { 
-                    aggression: 0.5, 
-                    bluffRate: 0.08, 
-                    cbetRate: 0.5,
-                    foldTo3bet: 0.6,
-                    vpip: 0.15,
-                    pfr: 0.12,
-                    name: '岩石型',
+                    // 职业LAG - 松凶型职业牌手
+                    aggression: 0.88, 
+                    bluffRate: 0.35, 
+                    cbetRate: 0.85,
+                    foldTo3bet: 0.22,
+                    vpip: 0.32,
+                    pfr: 0.27,
+                    name: '职业LAG',
                     gto: {
-                        aa: { raise: 0.9, call: 0.1 },
-                        kk: { raise: 0.85, call: 0.15 },
-                        qq: { raise: 0.75, call: 0.25 },
+                        aa: { raise: 0.78, call: 0.22 },
+                        kk: { raise: 0.72, call: 0.28 },
+                        qq: { raise: 0.6, call: 0.4 },
                         ak: { raise: 0.8, call: 0.2 },
-                        aq: { raise: 0.6, call: 0.4 },
-                        valueBet: { raise: 0.85, check: 0.15 },
-                        bluff: { bluff: 0.3, check: 0.7 }
+                        aq: { raise: 0.68, call: 0.32 },
+                        valueBet: { raise: 0.72, check: 0.28 },
+                        bluff: { bluff: 0.72, check: 0.28 }
                     },
-                    rangeWeights: { premium: 0.02, strong: 0.06, medium: 0.12, speculative: 0.15, weak: 0.65 }
+                    rangeWeights: { premium: 0.05, strong: 0.13, medium: 0.22, speculative: 0.28, weak: 0.32 }
                 },
                 { 
-                    aggression: 0.7, 
-                    bluffRate: 0.15, 
-                    cbetRate: 0.65,
-                    foldTo3bet: 0.35,
-                    vpip: 0.25,
-                    pfr: 0.20,
-                    name: 'LAG-Pro',
+                    // 超凶鲨鱼 - 极度激进
+                    aggression: 0.92, 
+                    bluffRate: 0.4, 
+                    cbetRate: 0.9,
+                    foldTo3bet: 0.15,
+                    vpip: 0.38,
+                    pfr: 0.32,
+                    name: '超凶鲨鱼',
                     gto: {
                         aa: { raise: 0.75, call: 0.25 },
                         kk: { raise: 0.7, call: 0.3 },
                         qq: { raise: 0.55, call: 0.45 },
-                        ak: { raise: 0.75, call: 0.25 },
-                        aq: { raise: 0.6, call: 0.4 },
-                        valueBet: { raise: 0.7, check: 0.3 },
-                        bluff: { bluff: 0.55, check: 0.45 }
+                        ak: { raise: 0.82, call: 0.18 },
+                        aq: { raise: 0.75, call: 0.25 },
+                        valueBet: { raise: 0.68, check: 0.32 },
+                        bluff: { bluff: 0.78, check: 0.22 }
                     },
-                    rangeWeights: { premium: 0.04, strong: 0.1, medium: 0.18, speculative: 0.23, weak: 0.45 }
+                    rangeWeights: { premium: 0.06, strong: 0.15, medium: 0.24, speculative: 0.3, weak: 0.25 }
                 },
                 { 
-                    aggression: 0.85, 
+                    // 混合策略大师 - 根据情况调整
+                    aggression: 0.78, 
                     bluffRate: 0.3, 
-                    cbetRate: 0.8,
-                    foldTo3bet: 0.25,
-                    vpip: 0.35,
-                    pfr: 0.28,
-                    name: '超凶型',
+                    cbetRate: 0.75,
+                    foldTo3bet: 0.28,
+                    vpip: 0.28,
+                    pfr: 0.23,
+                    name: '策略大师',
                     gto: {
-                        aa: { raise: 0.7, call: 0.3 },
-                        kk: { raise: 0.65, call: 0.35 },
-                        qq: { raise: 0.5, call: 0.5 },
-                        ak: { raise: 0.8, call: 0.2 },
-                        aq: { raise: 0.7, call: 0.3 },
-                        valueBet: { raise: 0.65, check: 0.35 },
-                        bluff: { bluff: 0.7, check: 0.3 }
+                        aa: { raise: 0.82, call: 0.18 },
+                        kk: { raise: 0.78, call: 0.22 },
+                        qq: { raise: 0.68, call: 0.32 },
+                        ak: { raise: 0.78, call: 0.22 },
+                        aq: { raise: 0.62, call: 0.38 },
+                        valueBet: { raise: 0.75, check: 0.25 },
+                        bluff: { bluff: 0.65, check: 0.35 }
                     },
-                    rangeWeights: { premium: 0.05, strong: 0.12, medium: 0.2, speculative: 0.25, weak: 0.38 }
-                },
-                { 
-                    aggression: 0.55, 
-                    bluffRate: 0.12, 
-                    cbetRate: 0.55,
-                    foldTo3bet: 0.5,
-                    vpip: 0.2,
-                    pfr: 0.15,
-                    name: '混合型',
-                    gto: {
-                        aa: { raise: 0.8, call: 0.2 },
-                        kk: { raise: 0.75, call: 0.25 },
-                        qq: { raise: 0.6, call: 0.4 },
-                        ak: { raise: 0.7, call: 0.3 },
-                        aq: { raise: 0.55, call: 0.45 },
-                        valueBet: { raise: 0.7, check: 0.3 },
-                        bluff: { bluff: 0.5, check: 0.5 }
-                    },
-                    rangeWeights: { premium: 0.03, strong: 0.08, medium: 0.15, speculative: 0.2, weak: 0.54 }
+                    rangeWeights: { premium: 0.04, strong: 0.11, medium: 0.19, speculative: 0.24, weak: 0.42 }
                 }
             ];
             return styles[(playerId - 1) % styles.length];
@@ -1872,62 +1873,73 @@
                     const preflopPotOdds = toCall / (gameState.pot + toCall);
                     
                     if (facing3bet) {
-                        // 面对 3-bet：使用 GTO 混合策略，但职业牌手更强
+                        // 面对 3-bet：职业牌手更强硬
                         if (handType === 'AA' || handType === 'KK') {
-                            decision = Math.random() < 0.6 ? 'raise' : 'call'; // 4-bet或慢打
+                            decision = Math.random() < 0.7 ? 'raise' : 'call'; // 更倾向4-bet
                         } else if (handType === 'QQ') {
-                            decision = gtoDecision('qq', null);
-                            if (!decision) decision = Math.random() < 0.7 ? 'call' : 'fold';
+                            decision = Math.random() < 0.55 ? 'raise' : 'call'; // QQ也4-bet
                         } else if (handType === 'AKs' || handType === 'AKo') {
-                            decision = Math.random() < 0.6 ? 'call' : 'fold';
+                            decision = Math.random() < 0.65 ? 'call' : 'fold';
                         } else if (handType === 'JJ') {
-                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                            decision = Math.random() < 0.55 ? 'call' : 'fold';
+                        } else if (handType === 'TT') {
+                            decision = Math.random() < 0.45 ? 'call' : 'fold';
                         } else if (preflopStrength > 0.5 && highBluffSuspicion) {
                             // 怀疑诈唬时更宽
-                            decision = Math.random() < 0.5 ? 'call' : 'fold';
-                        } else if (preflopStrength > 0.45 && preflopPotOdds < 0.25) {
-                            // 好赔率
-                            decision = Math.random() < 0.4 ? 'call' : 'fold';
+                            decision = Math.random() < 0.55 ? 'call' : 'fold';
+                        } else if (preflopStrength > 0.4 && preflopPotOdds < 0.28) {
+                            // 好赔率更宽
+                            decision = Math.random() < 0.45 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
                     } else {
-                        // 面对普通加注：职业牌手更宽松
+                        // 面对普通加注：职业牌手很宽松
                         if (preflopStrength > 0.8) {
-                            decision = Math.random() < 0.7 ? 'raise' : 'call';
+                            decision = Math.random() < 0.75 ? 'raise' : 'call';
                         } else if (preflopStrength > 0.65) {
-                            decision = Math.random() < 0.5 ? 'raise' : 'call';
-                        } else if (preflopStrength > 0.45) {
-                            // 中等牌：底池赔率好就跟
-                            if (preflopPotOdds < 0.3 || highBluffSuspicion) {
-                                decision = Math.random() < 0.3 ? 'raise' : 'call';
+                            decision = Math.random() < 0.55 ? 'raise' : 'call';
+                        } else if (preflopStrength > 0.5) {
+                            // 中强牌：更积极
+                            if (positionAdv > 0.6) {
+                                decision = Math.random() < 0.4 ? 'raise' : 'call';
                             } else {
-                                decision = Math.random() < 0.6 ? 'call' : 'fold';
+                                decision = Math.random() < 0.3 ? 'raise' : 'call';
+                            }
+                        } else if (preflopStrength > 0.4) {
+                            // 中等牌：底池赔率好就跟
+                            if (preflopPotOdds < 0.35 || highBluffSuspicion) {
+                                decision = Math.random() < 0.35 ? 'raise' : 'call';
+                            } else {
+                                decision = Math.random() < 0.7 ? 'call' : 'fold';
                             }
                         } else if (preflopStrength > 0.3) {
                             // 投机牌：看隐含赔率和底池赔率
-                            if (impliedOdds > 2.5 || preflopPotOdds < 0.15) {
+                            if (impliedOdds > 2.2 || preflopPotOdds < 0.18) {
                                 decision = 'call';
-                            } else if (highBluffSuspicion && preflopPotOdds < 0.25) {
-                                decision = Math.random() < 0.5 ? 'call' : 'fold';
+                            } else if (highBluffSuspicion && preflopPotOdds < 0.28) {
+                                decision = Math.random() < 0.55 ? 'call' : 'fold';
                             } else {
                                 decision = 'fold';
                             }
-                        } else if (preflopStrength > 0.2 && highBluffSuspicion && preflopPotOdds < 0.2) {
-                            // 弱牌但高诈唬嫌疑 + 好赔率
-                            decision = Math.random() < 0.3 ? 'call' : 'fold';
+                        } else if (preflopStrength > 0.2 && positionAdv > 0.8 && preflopPotOdds < 0.15) {
+                            // 好位置 + 好赔率 + 弱牌：偶尔偷一下
+                            decision = Math.random() < 0.35 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
                     }
                 } else {
-                    // 没人加注，决定是否 open raise
+                    // 没人加注，决定是否 open raise - 职业牌手更激进
                     if (preflopStrength > 0.55) {
-                        decision = Math.random() < style.pfr * (1 + positionAdv * 0.5) ? 'raise' : 'check';
-                    } else if (preflopStrength > 0.35 && positionAdv > 0.75) {
-                        decision = Math.random() < style.bluffRate * 1.5 ? 'raise' : 'check';
-                    } else if (preflopStrength > 0.25 && positionAdv > 0.85) {
-                        decision = Math.random() < style.bluffRate ? 'raise' : 'check';
+                        decision = Math.random() < (style.pfr * 1.2) * (1 + positionAdv * 0.5) ? 'raise' : 'check';
+                    } else if (preflopStrength > 0.4 && positionAdv > 0.65) {
+                        decision = Math.random() < (style.bluffRate * 1.8) ? 'raise' : 'check';
+                    } else if (preflopStrength > 0.3 && positionAdv > 0.75) {
+                        decision = Math.random() < (style.bluffRate * 1.5) ? 'raise' : 'check';
+                    } else if (positionAdv > 0.85) {
+                        // 庄家位置：更宽的偷盲范围
+                        decision = Math.random() < (style.bluffRate * 1.3) ? 'raise' : 'check';
                     } else {
                         decision = 'check';
                     }
@@ -1949,62 +1961,65 @@
                         decision = Math.random() < 0.7 ? 'raise' : 'call';
                     }
                 } else if (detailedStrength.tier >= 3) {
-                    // 强牌（顶对好踢脚、超对、三条、顺子、同花）
+                    // 强牌（顶对好踢脚、超对、三条、顺子、同花）- 职业牌手几乎不弃
                     if (toCall === 0) {
                         if (isRaiser && shouldCBet(player, boardTexture)) {
                             decision = 'raise';
                         } else {
-                            decision = plannedAction === 'value' ? 'raise' : 'check';
+                            decision = Math.random() < 0.65 ? 'raise' : 'check'; // 更激进
                         }
                     } else {
-                        // 面对下注：职业牌手很少弃顶对
+                        // 面对下注：职业牌手顶对几乎永远不弃
                         if (highBluffSuspicion) {
-                            // 怀疑诈唬：倾向于跟注或加注
-                            decision = Math.random() < 0.5 ? 'raise' : 'call';
+                            // 怀疑诈唬：加注或跟注
+                            decision = Math.random() < 0.55 ? 'raise' : 'call';
                         } else if (potOddsDecent) {
                             // 合理赔率：几乎必跟
-                            decision = Math.random() < 0.35 ? 'raise' : 'call';
-                        } else if (potOddsForCall < 0.6) {
+                            decision = Math.random() < 0.4 ? 'raise' : 'call';
+                        } else if (potOddsForCall < 0.65) {
                             // 中等赔率：仍然倾向跟
-                            decision = Math.random() < 0.75 ? 'call' : 'fold';
+                            decision = Math.random() < 0.82 ? 'call' : 'fold';
                         } else {
-                            // 很大注：看牌力和诈唬概率
-                            decision = Math.random() < (0.4 + avgBluffProb * 0.3) ? 'call' : 'fold';
+                            // 很大注：但顶对仍然可能跟
+                            decision = Math.random() < (0.5 + avgBluffProb * 0.3) ? 'call' : 'fold';
                         }
                     }
                 } else if (detailedStrength.tier >= 2) {
-                    // 中等牌（中对、顶对弱踢脚）- 职业牌手会用底池赔率决策
+                    // 中等牌（中对、顶对弱踢脚）- 职业牌手会用底池赔率 + 位置
                     if (toCall === 0) {
                         if (isRaiser && shouldCBet(player, boardTexture)) {
                             decision = 'raise';
                         } else if (detailedStrength.detail.includes('top_pair')) {
-                            decision = Math.random() < 0.5 ? 'raise' : 'check';
+                            decision = Math.random() < 0.6 ? 'raise' : 'check'; // 更激进
                         } else {
-                            decision = Math.random() < style.bluffRate ? 'raise' : 'check';
+                            decision = Math.random() < (style.bluffRate * 1.5) ? 'raise' : 'check';
                         }
                     } else {
-                        // 面对下注：用底池赔率 + 诈唬检测
-                        if (highBluffSuspicion && potOddsForCall < 0.5) {
+                        // 面对下注：职业牌手中对也愿意跟
+                        if (highBluffSuspicion && potOddsForCall < 0.55) {
                             // 高诈唬嫌疑 + 合理赔率：职业牌手会抓
-                            decision = Math.random() < 0.7 ? 'call' : 'fold';
+                            decision = Math.random() < 0.75 ? 'call' : 'fold';
                         } else if (potOddsGood) {
                             // 3:1或更好赔率：职业牌手几乎必跟
-                            decision = Math.random() < 0.8 ? 'call' : 'fold';
+                            decision = Math.random() < 0.85 ? 'call' : 'fold';
                         } else if (potOddsDecent) {
                             // 2:1赔率：倾向跟
-                            decision = Math.random() < 0.65 ? 'call' : 'fold';
-                        } else if (potOddsForCall < 0.6) {
-                            // 不太好的赔率但可接受
-                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                            decision = Math.random() < 0.72 ? 'call' : 'fold';
+                        } else if (potOddsForCall < 0.65) {
+                            // 不太好的赔率但仍可接受
+                            decision = Math.random() < 0.55 ? 'call' : 'fold';
                         } else if (highBluffSuspicion) {
                             // 很差赔率但高诈唬嫌疑：可能抓
+                            decision = Math.random() < 0.45 ? 'call' : 'fold';
+                        } else if (positionAdv > 0.7 && potOddsForCall < 0.7) {
+                            // 好位置可以宽一点
                             decision = Math.random() < 0.4 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
                     }
                 } else if (detailedStrength.drawStrength > 0.35) {
-                    // 好听牌：用底池赔率决策
+                    // 好听牌：职业牌手会积极打
                     if (toCall === 0) {
                         decision = Math.random() < style.aggression * 0.7 ? 'raise' : 'check';
                     } else if (potOddsForCall < detailedStrength.drawStrength * 0.9) {
@@ -2015,56 +2030,62 @@
                         decision = 'call';
                     } else if (highBluffSuspicion && potOddsDecent) {
                         // 可能对手在诈唬
-                        decision = Math.random() < 0.6 ? 'call' : 'fold';
-                    } else if (Math.random() < 0.25) {
-                        decision = 'raise'; // 半诈唬
+                        decision = Math.random() < 0.65 ? 'call' : 'fold';
+                    } else if (Math.random() < 0.32) {
+                        decision = 'raise'; // 半诈唬更频繁
                     } else {
                         decision = 'fold';
                     }
                 } else if (detailedStrength.tier >= 1) {
-                    // 弱牌（底对、高牌）- 但职业牌手偶尔会抓诈唬
+                    // 弱牌（底对、高牌）- 职业牌手偶尔会英雄式抓诈唬
                     if (toCall === 0) {
-                        const bluffCondition = positionAdv > 0.65 && boardTexture === 'dry' && avgBluffProb < 0.25;
-                        decision = (Math.random() < style.bluffRate && bluffCondition) ? 'raise' : 'check';
+                        const bluffCondition = positionAdv > 0.6 && boardTexture === 'dry';
+                        decision = (Math.random() < style.bluffRate * 1.2 && bluffCondition) ? 'raise' : 'check';
                     } else {
                         // 面对下注：主要看是否值得抓诈唬
                         if (highBluffSuspicion && potOddsGood) {
                             // 高诈唬嫌疑 + 好赔率：职业牌手会抓
-                            decision = Math.random() < 0.55 ? 'call' : 'fold';
+                            decision = Math.random() < 0.6 ? 'call' : 'fold';
                         } else if (highBluffSuspicion && potOddsDecent) {
+                            decision = Math.random() < 0.45 ? 'call' : 'fold';
+                        } else if (potOddsGood && avgBluffProb > 0.3) {
                             decision = Math.random() < 0.4 ? 'call' : 'fold';
-                        } else if (potOddsGood && avgBluffProb > 0.25) {
-                            decision = Math.random() < 0.35 ? 'call' : 'fold';
+                        } else if (positionAdv > 0.8 && potOddsGood) {
+                            // 好位置 + 好赔率：偶尔抓
+                            decision = Math.random() < 0.3 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
                     }
                 } else {
-                    // 空气牌：纯诈唬
+                    // 空气牌：职业牌手也会诈唬
                     if (toCall === 0) {
-                        const bluffCondition = positionAdv > 0.7 && boardTexture === 'dry' && spr > 5;
-                        decision = (Math.random() < style.bluffRate * 0.7 && bluffCondition) ? 'raise' : 'check';
+                        const bluffCondition = positionAdv > 0.65 && (boardTexture === 'dry' || Math.random() < style.bluffRate);
+                        decision = (Math.random() < style.bluffRate * 0.9 && bluffCondition) ? 'raise' : 'check';
                     } else {
                         decision = 'fold';
                     }
                 }
             }
             
-            // All in 决策（职业牌手更激进）
+            // All in 决策（职业牌手更激进但聪明）
             if (toCall >= player.chips && decision !== 'fold') {
                 if (detailedStrength.tier >= 4) {
                     decision = 'allin'; // 超强牌
-                } else if (detailedStrength.tier >= 3 && spr < 4) {
+                } else if (detailedStrength.tier >= 3 && spr < 5) {
                     decision = 'allin'; // 强牌中低 SPR
-                } else if (detailedStrength.tier >= 2 && spr < 2) {
+                } else if (detailedStrength.tier >= 2 && spr < 3) {
                     decision = 'allin'; // 中等牌低 SPR
-                } else if (equity > 0.5 && callCost > 0.5) {
-                    decision = 'allin'; // 胜率足够
+                } else if (equity > 0.48 && callCost > 0.5) {
+                    decision = 'allin'; // 胜率接近50%
                 } else if (highBluffSuspicion && detailedStrength.tier >= 2) {
                     decision = 'allin'; // 抓诈唬
-                } else if (highBluffSuspicion && equity > 0.35) {
-                    // 高诈唬嫌疑时，有35%胜率也可能跟
-                    decision = Math.random() < 0.6 ? 'allin' : 'fold';
+                } else if (highBluffSuspicion && equity > 0.32) {
+                    // 高诈唬嫌疑时，有32%胜率也可能跟
+                    decision = Math.random() < 0.65 ? 'allin' : 'fold';
+                } else if (detailedStrength.tier >= 1 && spr < 2 && highBluffSuspicion) {
+                    // 弱牌但低SPR且怀疑诈唬
+                    decision = Math.random() < 0.4 ? 'allin' : 'fold';
                 } else {
                     decision = 'fold';
                 }
