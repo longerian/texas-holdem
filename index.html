@@ -1010,6 +1010,10 @@
                 gameState.actedThisRound.push(0);
             }
             
+            // 记录玩家的加注行为（让AI能追踪）
+            recordAction(0, 'raise', raiseAmount, gameState.phase);
+            recordAction(0, 'pfr', 0, gameState.phase);
+            
             if (toCall >= player.chips) {
                 // All in
                 const allInAmount = player.chips;
@@ -1087,19 +1091,22 @@
                 const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
                 if (nonAllInPlayers.length <= 1) {
                     // 只剩 0 或 1 个可以行动的玩家，直接发完牌摊牌
-                    while (gameState.communityCards.length < 5) {
-                        if (gameState.communityCards.length === 0) {
-                            gameState.communityCards = [
-                                gameState.deck.pop(),
-                                gameState.deck.pop(),
-                                gameState.deck.pop()
-                            ];
-                        } else {
-                            gameState.communityCards.push(gameState.deck.pop());
-                        }
+                    // 使用动画发牌
+                    const cardsToDeal = [];
+                    while (cardsToDeal.length + gameState.communityCards.length < 5) {
+                        cardsToDeal.push(gameState.deck.pop());
                     }
-                    gameState.phase = 'river';
-                    showdown();
+                    
+                    if (cardsToDeal.length > 0) {
+                        gameState.phase = 'flop';
+                        dealCommunityCardsWithAnimation(cardsToDeal, () => {
+                            gameState.phase = 'river';
+                            showdown();
+                        });
+                    } else {
+                        gameState.phase = 'river';
+                        showdown();
+                    }
                     return;
                 }
                 // 进入下一阶段
@@ -1134,19 +1141,22 @@
             const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
             if (nonAllInPlayers.length === 0) {
                 // 所有人都 all in，直接发完牌并摊牌
-                while (gameState.communityCards.length < 5) {
-                    if (gameState.communityCards.length === 0) {
-                        gameState.communityCards = [
-                            gameState.deck.pop(),
-                            gameState.deck.pop(),
-                            gameState.deck.pop()
-                        ];
-                    } else {
-                        gameState.communityCards.push(gameState.deck.pop());
-                    }
+                // 使用动画发牌
+                const cardsToDeal = [];
+                while (cardsToDeal.length + gameState.communityCards.length < 5) {
+                    cardsToDeal.push(gameState.deck.pop());
                 }
-                gameState.phase = 'river';
-                showdown();
+                
+                if (cardsToDeal.length > 0) {
+                    gameState.phase = 'flop';
+                    dealCommunityCardsWithAnimation(cardsToDeal, () => {
+                        gameState.phase = 'river';
+                        showdown();
+                    });
+                } else {
+                    gameState.phase = 'river';
+                    showdown();
+                }
             } else if (nonAllInPlayers.length === 1) {
                 // 只剩一个人可以行动，其他人都是 all in
                 // 这个人行动后直接进入摊牌
@@ -1207,7 +1217,9 @@
                     riverBets: 0,          // 河牌下注次数
                     riverBluffs: 0,        // 河牌诈唬次数（摊牌后发现）
                     avgBetSize: [],        // 下注大小记录
-                    lastActions: []        // 最近行动记录
+                    lastActions: [],       // 最近行动记录
+                    totalRaises: 0,        // 总加注次数
+                    postflopRaises: 0      // 翻牌后加注次数
                 };
             }
         }
@@ -1232,6 +1244,10 @@
             }
             if (action === 'bluff') track.bluffs++;
             if (action === 'bluffCaught') track.bluffCaught++;
+            if (action === 'raise') {
+                track.totalRaises++;
+                if (phase !== 'preflop') track.postflopRaises++;
+            }
             
             track.totalHands++;
         }
@@ -1260,7 +1276,11 @@
                 foldTo3bet: track.foldTo3bet / Math.max(1, track.threeBets),
                 foldToCbet: track.foldToCbet / Math.max(1, track.cbets),
                 riverBluffFreq: track.riverBluffs / Math.max(1, track.riverBets),
-                aggression: track.pfrHands / Math.max(1, track.vpipHands)
+                aggression: track.pfrHands / Math.max(1, track.vpipHands),
+                raiseFreq: track.totalRaises / Math.max(1, track.totalHands),
+                postflopRaiseFreq: track.postflopRaises / Math.max(1, track.totalHands - track.vpipHands + track.pfrHands),
+                // 最近5手牌的加注次数
+                recentRaises: track.lastActions.slice(-10).filter(a => a.action === 'raise').length
             };
         }
         
@@ -1444,6 +1464,38 @@
         
         // ==================== 诈唬检测系统 ====================
         
+        // 检测玩家（id=0）的整体攻击性 - 用于判断是否过度攻击
+        function detectPlayerAggression() {
+            const stats = getOpponentStats(0);
+            const track = opponentTracking[0];
+            
+            let aggression = 0.3; // 基础攻击性
+            
+            // 玩家加注频率高 = 高攻击性
+            if (stats.raiseFreq > 0.5) aggression += 0.4;
+            else if (stats.raiseFreq > 0.35) aggression += 0.25;
+            else if (stats.raiseFreq > 0.25) aggression += 0.1;
+            
+            // 玩家很少弃牌 = 激进
+            if (stats.foldFreq < 0.2) aggression += 0.15;
+            
+            // 近期频繁大注
+            if (stats.recentRaises >= 3) aggression += 0.2;
+            else if (stats.recentRaises >= 2) aggression += 0.1;
+            
+            // 翻牌后攻击性更高更可疑
+            if (gameState.phase !== 'preflop' && stats.postflopRaiseFreq > 0.35) {
+                aggression += 0.15;
+            }
+            
+            // 摊牌胜率低但加注多 = 诈唬多
+            if (stats.showdowns > 3 && stats.showdownWins / stats.showdowns < 0.4 && stats.raiseFreq > 0.3) {
+                aggression += 0.2;
+            }
+            
+            return Math.min(aggression, 1);
+        }
+        
         // 检测对手是否可能在诈唬
         function detectBluff(opponentId, action, betSize, boardTexture) {
             const stats = getOpponentStats(opponentId);
@@ -1456,7 +1508,20 @@
             else if (stats.bluffFreq > 0.2) bluffProbability += 0.1;
             else if (stats.bluffFreq < 0.1) bluffProbability -= 0.1;
             
-            // 因素2：下注大小异常
+            // 因素2：频繁加注模式（新增 - 最重要）
+            if (stats.raiseFreq > 0.4 || stats.recentRaises >= 3) {
+                // 玩家加注频率很高，很可能是诈唬
+                bluffProbability += 0.25;
+            } else if (stats.raiseFreq > 0.3 || stats.recentRaises >= 2) {
+                bluffProbability += 0.15;
+            }
+            
+            // 翻牌后频繁加注更可疑
+            if (gameState.phase !== 'preflop' && stats.postflopRaiseFreq > 0.3) {
+                bluffProbability += 0.15;
+            }
+            
+            // 因素3：下注大小异常
             const potSizedBet = gameState.pot > 0 ? betSize / gameState.pot : 0;
             if (potSizedBet > 1.5 && gameState.phase === 'river' && track) {
                 // 河牌超大注：可能是价值也可能是诈唬
@@ -1466,7 +1531,7 @@
                 bluffProbability -= 0.1;
             }
             
-            // 因素3：牌面结构
+            // 因素4：牌面结构
             if (boardTexture === 'dry' && potSizedBet > 0.7) {
                 // 干牌面大注：更可能是诈唬（没什么可价值的）
                 bluffProbability += 0.1;
@@ -1475,7 +1540,7 @@
                 bluffProbability -= 0.05;
             }
             
-            // 因素4：对手入池频率
+            // 因素5：对手入池频率
             if (stats.vpip > 0.35) {
                 // 松的玩家更可能诈唬
                 bluffProbability += 0.1;
@@ -1484,16 +1549,16 @@
                 bluffProbability -= 0.15;
             }
             
-            // 因素5：连续行动模式
+            // 因素6：连续行动模式
             if (track && track.lastActions.length >= 3) {
                 const recentBets = track.lastActions.slice(-3).filter(a => a.action === 'raise' || a.action === 'bet').length;
                 if (recentBets >= 2) {
                     // 连续激进：可能是一直在诈唬
-                    bluffProbability += 0.1;
+                    bluffProbability += 0.15;
                 }
             }
             
-            return Math.max(0.05, Math.min(0.7, bluffProbability));
+            return Math.max(0.05, Math.min(0.8, bluffProbability));
         }
         
         // ==================== 多街规划系统 ====================
@@ -1764,6 +1829,16 @@
             
             // 跟注成本占总筹码的比例
             const callCost = player.chips > 0 ? toCall / player.chips : 1;
+            // 底池赔率（更重要的指标）
+            const potOddsForCall = toCall > 0 ? toCall / (gameState.pot + toCall) : 0;
+            // 底池赔率是否合理（职业牌手核心指标）
+            const potOddsGood = potOddsForCall < 0.33; // 3:1 或更好的赔率
+            const potOddsDecent = potOddsForCall < 0.5; // 2:1 或更好的赔率
+            
+            // 检测玩家是否在过度攻击（频繁大注 = 可能诈唬）
+            const playerAggression = detectPlayerAggression();
+            // 如果玩家经常大注但摊牌时牌力不强，高诈唬概率
+            const highBluffSuspicion = avgBluffProb > 0.35 || playerAggression > 0.7;
             
             // ===== GTO 混合策略辅助函数 =====
             function gtoDecision(handType, situation) {
@@ -1783,54 +1858,61 @@
                 return rand < freq.raise ? 'raise' : 'call';
             }
             
-            // 翻牌前策略（职业级别 + GTO 混合）
+            // 翻牌前策略（职业级别 + GTO 混合 + 诈唬检测）
             if (gameState.phase === 'preflop') {
                 const preflopStrength = getPreflopStrength(player.hand);
                 const handType = getHandType(player.hand);
                 
                 // 面对加注
                 if (toCall > 0) {
+                    // 计算翻牌前底池赔率
+                    const preflopPotOdds = toCall / (gameState.pot + toCall);
+                    
                     if (facing3bet) {
-                        // 面对 3-bet：使用 GTO 混合策略
+                        // 面对 3-bet：使用 GTO 混合策略，但职业牌手更强
                         if (handType === 'AA' || handType === 'KK') {
-                            decision = gtoDecision(handType === 'AA' ? 'aa' : 'kk', null);
-                            if (decision === 'call') decision = Math.random() < 0.5 ? 'call' : 'raise'; // 慢打或4-bet
+                            decision = Math.random() < 0.6 ? 'raise' : 'call'; // 4-bet或慢打
                         } else if (handType === 'QQ') {
                             decision = gtoDecision('qq', null);
+                            if (!decision) decision = Math.random() < 0.7 ? 'call' : 'fold';
                         } else if (handType === 'AKs' || handType === 'AKo') {
-                            decision = gtoDecision('ak', null);
-                        } else if (preflopStrength > 0.6) {
-                            decision = Math.random() < style.foldTo3bet ? 'fold' : 'call';
-                        } else if (preflopStrength > 0.45 && callCost < 0.1) {
-                            // 中等牌看赔率
-                            decision = equity > 0.4 ? 'call' : 'fold';
+                            decision = Math.random() < 0.6 ? 'call' : 'fold';
+                        } else if (handType === 'JJ') {
+                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                        } else if (preflopStrength > 0.5 && highBluffSuspicion) {
+                            // 怀疑诈唬时更宽
+                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                        } else if (preflopStrength > 0.45 && preflopPotOdds < 0.25) {
+                            // 好赔率
+                            decision = Math.random() < 0.4 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
                     } else {
-                        // 面对普通加注
+                        // 面对普通加注：职业牌手更宽松
                         if (preflopStrength > 0.8) {
-                            // 超强牌：GTO 混合
-                            decision = gtoDecision(handType === 'AA' ? 'aa' : handType === 'KK' ? 'kk' : 'qq', null);
-                            if (!decision) decision = 'raise';
+                            decision = Math.random() < 0.7 ? 'raise' : 'call';
                         } else if (preflopStrength > 0.65) {
-                            // 强牌
-                            const rand = Math.random();
-                            if (rand < style.aggression * 0.7) decision = 'raise';
-                            else decision = 'call';
+                            decision = Math.random() < 0.5 ? 'raise' : 'call';
                         } else if (preflopStrength > 0.45) {
-                            // 中等牌：位置重要
-                            if (positionAdv > 0.7) {
-                                decision = Math.random() < 0.4 ? 'raise' : 'call';
+                            // 中等牌：底池赔率好就跟
+                            if (preflopPotOdds < 0.3 || highBluffSuspicion) {
+                                decision = Math.random() < 0.3 ? 'raise' : 'call';
                             } else {
-                                decision = 'call';
+                                decision = Math.random() < 0.6 ? 'call' : 'fold';
                             }
-                        } else if (preflopStrength > 0.3 && callCost < 0.08) {
-                            // 投机牌（小对子、同花连牌）：看隐含赔率
-                            decision = impliedOdds > 2.5 ? 'call' : 'fold';
-                        } else if (callCost < 0.03 && positionAdv > 0.85) {
-                            // 庄家位置可以宽一点
-                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                        } else if (preflopStrength > 0.3) {
+                            // 投机牌：看隐含赔率和底池赔率
+                            if (impliedOdds > 2.5 || preflopPotOdds < 0.15) {
+                                decision = 'call';
+                            } else if (highBluffSuspicion && preflopPotOdds < 0.25) {
+                                decision = Math.random() < 0.5 ? 'call' : 'fold';
+                            } else {
+                                decision = 'fold';
+                            }
+                        } else if (preflopStrength > 0.2 && highBluffSuspicion && preflopPotOdds < 0.2) {
+                            // 弱牌但高诈唬嫌疑 + 好赔率
+                            decision = Math.random() < 0.3 ? 'call' : 'fold';
                         } else {
                             decision = 'fold';
                         }
@@ -1840,10 +1922,8 @@
                     if (preflopStrength > 0.55) {
                         decision = Math.random() < style.pfr * (1 + positionAdv * 0.5) ? 'raise' : 'check';
                     } else if (preflopStrength > 0.35 && positionAdv > 0.75) {
-                        // 好位置可以偷盲
                         decision = Math.random() < style.bluffRate * 1.5 ? 'raise' : 'check';
                     } else if (preflopStrength > 0.25 && positionAdv > 0.85) {
-                        // 庄家位置更宽
                         decision = Math.random() < style.bluffRate ? 'raise' : 'check';
                     } else {
                         decision = 'check';
@@ -1860,85 +1940,105 @@
                 // 根据多街计划调整决策
                 const plannedAction = multiStreetPlan.current?.action;
                 
+                // ===== 职业牌手核心：底池赔率 + 范围思维 + 诈唬检测 =====
+                
                 if (detailedStrength.tier >= 4) {
-                    // 超强牌（Set、两对以上）
+                    // 超强牌（Set、两对以上）- 几乎永远不弃牌
                     if (toCall === 0) {
-                        // 价值下注，偶尔慢打
                         decision = Math.random() < (plannedAction === 'value' ? 0.75 : 0.5) ? 'raise' : 'check';
-                    } else if (callCost > 0.3) {
-                        decision = 'raise'; // 大注直接加注
                     } else {
-                        decision = Math.random() < 0.6 ? 'raise' : 'call';
+                        decision = Math.random() < 0.7 ? 'raise' : 'call';
                     }
                 } else if (detailedStrength.tier >= 3) {
                     // 强牌（顶对好踢脚、超对、三条、顺子、同花）
                     if (toCall === 0) {
-                        // C-bet 或价值下注
                         if (isRaiser && shouldCBet(player, boardTexture)) {
                             decision = 'raise';
                         } else {
                             decision = plannedAction === 'value' ? 'raise' : 'check';
                         }
-                    } else if (callCost < 0.2) {
-                        // 合理的跟注
-                        if (avgBluffProb > 0.35) {
-                            // 对手可能在诈唬，更倾向于跟注或加注
-                            decision = Math.random() < 0.4 ? 'raise' : 'call';
-                        } else {
-                            decision = Math.random() < 0.3 ? 'raise' : 'call';
-                        }
-                    } else if (boardTexture === 'wet' && callCost < 0.35) {
-                        decision = 'call'; // 湿牌面控池
                     } else {
-                        // 大注：用范围思维判断
-                        decision = equity > 0.45 ? 'call' : (equity > 0.3 && avgBluffProb > 0.3 ? 'call' : 'fold');
+                        // 面对下注：职业牌手很少弃顶对
+                        if (highBluffSuspicion) {
+                            // 怀疑诈唬：倾向于跟注或加注
+                            decision = Math.random() < 0.5 ? 'raise' : 'call';
+                        } else if (potOddsDecent) {
+                            // 合理赔率：几乎必跟
+                            decision = Math.random() < 0.35 ? 'raise' : 'call';
+                        } else if (potOddsForCall < 0.6) {
+                            // 中等赔率：仍然倾向跟
+                            decision = Math.random() < 0.75 ? 'call' : 'fold';
+                        } else {
+                            // 很大注：看牌力和诈唬概率
+                            decision = Math.random() < (0.4 + avgBluffProb * 0.3) ? 'call' : 'fold';
+                        }
                     }
                 } else if (detailedStrength.tier >= 2) {
-                    // 中等牌（中对、顶对弱踢脚、两对）
+                    // 中等牌（中对、顶对弱踢脚）- 职业牌手会用底池赔率决策
                     if (toCall === 0) {
                         if (isRaiser && shouldCBet(player, boardTexture)) {
                             decision = 'raise';
                         } else if (detailedStrength.detail.includes('top_pair')) {
-                            // 顶对可以下注
                             decision = Math.random() < 0.5 ? 'raise' : 'check';
                         } else {
                             decision = Math.random() < style.bluffRate ? 'raise' : 'check';
                         }
-                    } else if (callCost < 0.12 && boardTexture === 'dry') {
-                        decision = 'call';
-                    } else if (callCost < 0.08) {
-                        decision = Math.random() < (avgBluffProb > 0.3 ? 0.7 : 0.5) ? 'call' : 'fold';
-                    } else if (avgBluffProb > 0.4 && callCost < 0.2) {
-                        // 怀疑诈唬
-                        decision = Math.random() < 0.6 ? 'call' : 'fold';
                     } else {
-                        decision = 'fold';
+                        // 面对下注：用底池赔率 + 诈唬检测
+                        if (highBluffSuspicion && potOddsForCall < 0.5) {
+                            // 高诈唬嫌疑 + 合理赔率：职业牌手会抓
+                            decision = Math.random() < 0.7 ? 'call' : 'fold';
+                        } else if (potOddsGood) {
+                            // 3:1或更好赔率：职业牌手几乎必跟
+                            decision = Math.random() < 0.8 ? 'call' : 'fold';
+                        } else if (potOddsDecent) {
+                            // 2:1赔率：倾向跟
+                            decision = Math.random() < 0.65 ? 'call' : 'fold';
+                        } else if (potOddsForCall < 0.6) {
+                            // 不太好的赔率但可接受
+                            decision = Math.random() < 0.5 ? 'call' : 'fold';
+                        } else if (highBluffSuspicion) {
+                            // 很差赔率但高诈唬嫌疑：可能抓
+                            decision = Math.random() < 0.4 ? 'call' : 'fold';
+                        } else {
+                            decision = 'fold';
+                        }
                     }
                 } else if (detailedStrength.drawStrength > 0.35) {
-                    // 好听牌：半诈唬
+                    // 好听牌：用底池赔率决策
                     if (toCall === 0) {
                         decision = Math.random() < style.aggression * 0.7 ? 'raise' : 'check';
-                    } else if (potOdds < detailedStrength.drawStrength * 0.8) {
+                    } else if (potOddsForCall < detailedStrength.drawStrength * 0.9) {
+                        // 底池赔率比听牌概率好：必跟
                         decision = 'call';
-                    } else if (impliedOdds > 2.5 && callCost < 0.15) {
+                    } else if (impliedOdds > 3 && potOddsDecent) {
+                        // 好的隐含赔率
                         decision = 'call';
-                    } else if (Math.random() < 0.3) {
-                        // 偶尔半诈唬加注
-                        decision = 'raise';
+                    } else if (highBluffSuspicion && potOddsDecent) {
+                        // 可能对手在诈唬
+                        decision = Math.random() < 0.6 ? 'call' : 'fold';
+                    } else if (Math.random() < 0.25) {
+                        decision = 'raise'; // 半诈唬
                     } else {
                         decision = 'fold';
                     }
                 } else if (detailedStrength.tier >= 1) {
-                    // 弱牌（底对、高牌）
+                    // 弱牌（底对、高牌）- 但职业牌手偶尔会抓诈唬
                     if (toCall === 0) {
-                        // 选好时机诈唬
                         const bluffCondition = positionAdv > 0.65 && boardTexture === 'dry' && avgBluffProb < 0.25;
                         decision = (Math.random() < style.bluffRate && bluffCondition) ? 'raise' : 'check';
-                    } else if (avgBluffProb > 0.45 && callCost < 0.1) {
-                        // 高诈唬概率，小注可以抓
-                        decision = Math.random() < 0.4 ? 'call' : 'fold';
                     } else {
-                        decision = 'fold';
+                        // 面对下注：主要看是否值得抓诈唬
+                        if (highBluffSuspicion && potOddsGood) {
+                            // 高诈唬嫌疑 + 好赔率：职业牌手会抓
+                            decision = Math.random() < 0.55 ? 'call' : 'fold';
+                        } else if (highBluffSuspicion && potOddsDecent) {
+                            decision = Math.random() < 0.4 ? 'call' : 'fold';
+                        } else if (potOddsGood && avgBluffProb > 0.25) {
+                            decision = Math.random() < 0.35 ? 'call' : 'fold';
+                        } else {
+                            decision = 'fold';
+                        }
                     }
                 } else {
                     // 空气牌：纯诈唬
@@ -1951,16 +2051,21 @@
                 }
             }
             
-            // All in 决策（更谨慎）
+            // All in 决策（职业牌手更激进）
             if (toCall >= player.chips && decision !== 'fold') {
                 if (detailedStrength.tier >= 4) {
                     decision = 'allin'; // 超强牌
-                } else if (detailedStrength.tier >= 3 && spr < 3) {
-                    decision = 'allin'; // 强牌低 SPR
-                } else if (equity > 0.55 && callCost > 0.5) {
+                } else if (detailedStrength.tier >= 3 && spr < 4) {
+                    decision = 'allin'; // 强牌中低 SPR
+                } else if (detailedStrength.tier >= 2 && spr < 2) {
+                    decision = 'allin'; // 中等牌低 SPR
+                } else if (equity > 0.5 && callCost > 0.5) {
                     decision = 'allin'; // 胜率足够
-                } else if (avgBluffProb > 0.5 && detailedStrength.tier >= 2) {
+                } else if (highBluffSuspicion && detailedStrength.tier >= 2) {
                     decision = 'allin'; // 抓诈唬
+                } else if (highBluffSuspicion && equity > 0.35) {
+                    // 高诈唬嫌疑时，有35%胜率也可能跟
+                    decision = Math.random() < 0.6 ? 'allin' : 'fold';
                 } else {
                     decision = 'fold';
                 }
@@ -2142,6 +2247,35 @@
             if (high === 'K' && low === 'Q') return 'KQ' + suffix;
             
             return high + low + suffix;
+        }
+        
+        // 带动画的发牌函数（用于 ALL-IN 快速发牌）
+        function dealCommunityCardsWithAnimation(cardsToDeal, callback) {
+            let delay = 0;
+            const delayIncrement = 500; // 每张牌间隔500毫秒
+            
+            cardsToDeal.forEach((card, index) => {
+                setTimeout(() => {
+                    gameState.communityCards.push(card);
+                    updateDisplay();
+                    
+                    // 设置消息
+                    if (gameState.communityCards.length === 3) {
+                        setMessage('翻牌!');
+                    } else if (gameState.communityCards.length === 4) {
+                        setMessage('转牌!');
+                    } else if (gameState.communityCards.length === 5) {
+                        setMessage('河牌!');
+                    }
+                    
+                    // 最后一张牌发完后执行回调
+                    if (index === cardsToDeal.length - 1 && callback) {
+                        setTimeout(callback, 300);
+                    }
+                }, delay);
+                
+                delay += delayIncrement;
+            });
         }
         
         // 进入下一阶段
