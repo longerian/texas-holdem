@@ -406,70 +406,11 @@
                 padding: 10px;
             }
         }
-        
-        /* 音效控制样式 */
-        .audio-controls {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 10px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .audio-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s;
-        }
-        
-        .audio-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .audio-btn.active {
-            background: #4CAF50;
-        }
-        
-        .audio-btn.muted {
-            background: #f44336;
-        }
-        
-        .volume-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .volume-slider {
-            width: 80px;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
     <div class="game-container">
         <h1>🃏 德州扑克 Texas Hold'em</h1>
-        
-        <!-- 音效控制面板 -->
-        <div class="audio-controls">
-            <div>
-                <button class="audio-btn active" id="bgmBtn" onclick="toggleBGM()">🎵 背景音乐</button>
-                <button class="audio-btn active" id="sfxBtn" onclick="toggleSFX()">🔊 音效</button>
-            </div>
-            <div class="volume-control">
-                <span style="color: white; font-size: 0.85em;">音量:</span>
-                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" onchange="setVolume(this.value)">
-            </div>
-        </div>
         
         <div class="stats">
             <div class="stat-card">
@@ -512,242 +453,7 @@
     </div>
     
     <script>
-        // ==================== 音效系统 ====================
-        class SoundSystem {
-            constructor() {
-                this.audioContext = null;
-                this.bgmEnabled = true;
-                this.sfxEnabled = true;
-                this.volume = 0.5;
-                this.bgmOscillator = null;
-                this.bgmGain = null;
-                this.isBGMPlaying = false;
-            }
-            
-            // 初始化音频上下文
-            init() {
-                if (!this.audioContext) {
-                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                return this.audioContext;
-            }
-            
-            // 播放发牌音效
-            playDealSound() {
-                if (!this.sfxEnabled) return;
-                this.init();
-                
-                const osc = this.audioContext.createOscillator();
-                const gain = this.audioContext.createGain();
-                
-                osc.connect(gain);
-                gain.connect(this.audioContext.destination);
-                
-                osc.frequency.setValueAtTime(800, this.audioContext.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, this.audioContext.currentTime + 0.1);
-                
-                gain.gain.setValueAtTime(this.volume * 0.3, this.audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-                
-                osc.start(this.audioContext.currentTime);
-                osc.stop(this.audioContext.currentTime + 0.1);
-            }
-            
-            // 播放下注音效
-            playBetSound() {
-                if (!this.sfxEnabled) return;
-                this.init();
-                
-                const osc = this.audioContext.createOscillator();
-                const gain = this.audioContext.createGain();
-                
-                osc.connect(gain);
-                gain.connect(this.audioContext.destination);
-                
-                osc.frequency.setValueAtTime(400, this.audioContext.currentTime);
-                osc.frequency.setValueAtTime(500, this.audioContext.currentTime + 0.05);
-                osc.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
-                
-                gain.gain.setValueAtTime(this.volume * 0.2, this.audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
-                
-                osc.start(this.audioContext.currentTime);
-                osc.stop(this.audioContext.currentTime + 0.15);
-            }
-            
-            // 播放获胜音效
-            playWinSound() {
-                if (!this.sfxEnabled) return;
-                this.init();
-                
-                const frequencies = [523, 659, 784, 1047];
-                frequencies.forEach((freq, index) => {
-                    const osc = this.audioContext.createOscillator();
-                    const gain = this.audioContext.createGain();
-                    
-                    osc.connect(gain);
-                    gain.connect(this.audioContext.destination);
-                    
-                    osc.frequency.setValueAtTime(freq, this.audioContext.currentTime + index * 0.15);
-                    
-                    gain.gain.setValueAtTime(0, this.audioContext.currentTime + index * 0.15);
-                    gain.gain.linearRampToValueAtTime(this.volume * 0.3, this.audioContext.currentTime + index * 0.15 + 0.05);
-                    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + index * 0.15 + 0.3);
-                    
-                    osc.start(this.audioContext.currentTime + index * 0.15);
-                    osc.stop(this.audioContext.currentTime + index * 0.15 + 0.3);
-                });
-            }
-            
-            // 播放弃牌音效
-            playFoldSound() {
-                if (!this.sfxEnabled) return;
-                this.init();
-                
-                const osc = this.audioContext.createOscillator();
-                const gain = this.audioContext.createGain();
-                
-                osc.connect(gain);
-                gain.connect(this.audioContext.destination);
-                
-                osc.frequency.setValueAtTime(600, this.audioContext.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(200, this.audioContext.currentTime + 0.2);
-                
-                gain.gain.setValueAtTime(this.volume * 0.2, this.audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
-                
-                osc.start(this.audioContext.currentTime);
-                osc.stop(this.audioContext.currentTime + 0.2);
-            }
-            
-            // 播放翻牌音效
-            playFlipSound() {
-                if (!this.sfxEnabled) return;
-                this.init();
-                
-                const osc = this.audioContext.createOscillator();
-                const gain = this.audioContext.createGain();
-                
-                osc.connect(gain);
-                gain.connect(this.audioContext.destination);
-                
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
-                osc.frequency.linearRampToValueAtTime(400, this.audioContext.currentTime + 0.05);
-                osc.frequency.linearRampToValueAtTime(300, this.audioContext.currentTime + 0.1);
-                
-                gain.gain.setValueAtTime(this.volume * 0.25, this.audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-                
-                osc.start(this.audioContext.currentTime);
-                osc.stop(this.audioContext.currentTime + 0.1);
-            }
-            
-            // 开始背景音乐
-            startBGM() {
-                if (!this.bgmEnabled || this.isBGMPlaying) return;
-                this.init();
-                
-                this.bgmGain = this.audioContext.createGain();
-                this.bgmGain.connect(this.audioContext.destination);
-                this.bgmGain.gain.setValueAtTime(this.volume * 0.1, this.audioContext.currentTime);
-                
-                // 简单的背景音乐循环
-                const playNote = (freq, startTime, duration) => {
-                    const osc = this.audioContext.createOscillator();
-                    const noteGain = this.audioContext.createGain();
-                    
-                    osc.connect(noteGain);
-                    noteGain.connect(this.bgmGain);
-                    
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, startTime);
-                    
-                    noteGain.gain.setValueAtTime(0, startTime);
-                    noteGain.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
-                    noteGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-                    
-                    osc.start(startTime);
-                    osc.stop(startTime + duration);
-                };
-                
-                // 简单的和弦进行
-                const bgmLoop = () => {
-                    if (!this.bgmEnabled || !this.isBGMPlaying) return;
-                    
-                    const now = this.audioContext.currentTime;
-                    const notes = [262, 330, 392, 523]; // C4, E4, G4, C5
-                    
-                    notes.forEach((freq, i) => {
-                        playNote(freq, now + i * 0.5, 2);
-                    });
-                    
-                    setTimeout(bgmLoop, 2000);
-                };
-                
-                this.isBGMPlaying = true;
-                bgmLoop();
-            }
-            
-            // 停止背景音乐
-            stopBGM() {
-                this.isBGMPlaying = false;
-                if (this.bgmGain) {
-                    this.bgmGain.gain.setValueAtTime(0, this.audioContext.currentTime);
-                }
-            }
-            
-            // 切换背景音乐
-            toggleBGM() {
-                this.bgmEnabled = !this.bgmEnabled;
-                if (this.bgmEnabled) {
-                    this.startBGM();
-                } else {
-                    this.stopBGM();
-                }
-                return this.bgmEnabled;
-            }
-            
-            // 切换音效
-            toggleSFX() {
-                this.sfxEnabled = !this.sfxEnabled;
-                return this.sfxEnabled;
-            }
-            
-            // 设置音量
-            setVolume(value) {
-                this.volume = value / 100;
-                if (this.bgmGain) {
-                    this.bgmGain.gain.setValueAtTime(this.volume * 0.1, this.audioContext.currentTime);
-                }
-            }
-        }
-        
-        // 创建全局音效实例
-        const soundSystem = new SoundSystem();
-        
-        // 音效控制函数
-        function toggleBGM() {
-            const enabled = soundSystem.toggleBGM();
-            const btn = document.getElementById('bgmBtn');
-            btn.classList.toggle('active', enabled);
-            btn.classList.toggle('muted', !enabled);
-            btn.textContent = enabled ? '🎵 背景音乐' : '🔇 背景音乐';
-        }
-        
-        function toggleSFX() {
-            const enabled = soundSystem.toggleSFX();
-            const btn = document.getElementById('sfxBtn');
-            btn.classList.toggle('active', enabled);
-            btn.classList.toggle('muted', !enabled);
-            btn.textContent = enabled ? '🔊 音效' : '🔇 音效';
-        }
-        
-        function setVolume(value) {
-            soundSystem.setVolume(value);
-        }
-        
-        // ==================== 游戏代码 ====================
+        // 游戏状态
         const NUM_PLAYERS = 6; // 1个玩家 + 5个电脑
         let gameState = {
             deck: [],
@@ -824,9 +530,6 @@
                     player.hand = [gameState.deck.pop(), gameState.deck.pop()];
                 }
             });
-            
-            // 播放发牌音效
-            soundSystem.playDealSound();
         }
         
         // 显示卡牌
@@ -1022,9 +725,6 @@
         
         // 开始新游戏
         function startNewGame() {
-            // 启动背景音乐
-            soundSystem.startBGM();
-            
             // 首次游戏时初始化玩家
             if (!gameState.playersInitialized) {
                 initPlayers();
@@ -1035,7 +735,6 @@
             const activePlayers = gameState.players.filter(p => p.chips > 0 || p.isHuman);
             if (activePlayers.length < 2) {
                 setMessage('游戏结束！没有足够的玩家继续游戏');
-                soundSystem.stopBGM();
                 return;
             }
             
@@ -1126,9 +825,6 @@
                 return;
             }
             
-            // 播放下注音效
-            soundSystem.playBetSound();
-            
             // 标记玩家已行动
             if (!gameState.actedThisRound.includes(0)) {
                 gameState.actedThisRound.push(0);
@@ -1142,9 +838,6 @@
         function playerCall() {
             const player = gameState.players[0];
             const toCall = gameState.currentBet - player.bet;
-            
-            // 播放下注音效
-            soundSystem.playBetSound();
             
             // 标记玩家已行动
             if (!gameState.actedThisRound.includes(0)) {
@@ -1219,9 +912,6 @@
         function playerFold() {
             const player = gameState.players[0];
             player.folded = true;
-            
-            // 播放弃牌音效
-            soundSystem.playFoldSound();
             
             // 标记玩家已行动（弃牌也算行动）
             if (!gameState.actedThisRound.includes(0)) {
@@ -2322,9 +2012,6 @@
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             gameState.actedThisRound = [];  // 重置行动记录
             
-            // 播放翻牌音效
-            soundSystem.playFlipSound();
-            
             if (gameState.phase === 'preflop') {
                 gameState.phase = 'flop';
                 gameState.communityCards = [
@@ -2419,8 +2106,6 @@
                 winner.chips += gameState.pot;
                 const isPlayer = winner.isHuman;
                 setMessage(`${isPlayer ? '🎉 你' : winner.name}赢了! ${winners[0].handRank.name} - 赢得 ${gameState.pot} 筹码!`);
-                // 播放获胜音效
-                soundSystem.playWinSound();
             } else {
                 // 平局
                 const splitPot = Math.floor(gameState.pot / winners.length);
