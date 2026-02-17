@@ -1837,6 +1837,9 @@
             
             // 检测玩家是否在过度攻击（频繁大注 = 可能诈唬）
             const playerAggression = detectPlayerAggression();
+            // 预先计算诈唬概率（用于翻牌前和翻牌后）
+            const avgBluffProb = opponentRanges.length > 0 ?
+                opponentRanges.reduce((sum, o) => sum + o.bluffProb, 0) / opponentRanges.length : 0.2;
             // 如果玩家经常大注但摊牌时牌力不强，高诈唬概率
             const highBluffSuspicion = avgBluffProb > 0.35 || playerAggression > 0.7;
             
@@ -1932,10 +1935,6 @@
             } else {
                 // 翻牌后策略（职业级别 + 范围思维 + 诈唬检测 + 多街规划）
                 const isRaiser = player.bet > 0 || gameState.lastRaisePlayerIndex === player.id;
-                
-                // 检测是否有对手在诈唬
-                const avgBluffProb = opponentRanges.length > 0 ?
-                    opponentRanges.reduce((sum, o) => sum + o.bluffProb, 0) / opponentRanges.length : 0.2;
                 
                 // 根据多街计划调整决策
                 const plannedAction = multiStreetPlan.current?.action;
