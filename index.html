@@ -1021,6 +1021,11 @@
         // 创建全局音效实例
         const soundSystem = new SoundSystem();
         
+        // 获取AI延迟时间（语音开启时延迟更长，让播报完整）
+        function getAIDelay() {
+            return soundSystem.voiceEnabled ? 1500 : 800;
+        }
+        
         // 音效控制函数
         function toggleBGM() {
             const enabled = soundSystem.toggleBGM();
@@ -1416,7 +1421,7 @@
             
             // 如果当前玩家是电脑，自动行动
             if (!currentPlayer.isHuman) {
-                setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
+                setTimeout(aiTurn, getAIDelay());  // 根据语音开关动态调整延迟
             }
         }
         
@@ -1622,7 +1627,7 @@
                     updateControls();
                     
                     if (!nextPlayer.isHuman) {
-                        setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
+                        setTimeout(aiTurn, getAIDelay());  // 根据语音开关动态调整延迟
                     }
                     return;
                 }
@@ -1656,7 +1661,7 @@
                 updateControls();
                 
                 if (!nonAllInPlayers[0].isHuman) {
-                    setTimeout(aiTurn, 800);
+                    setTimeout(aiTurn, getAIDelay());  // 根据语音开关动态调整延迟
                 }
             } else {
                 nextPhase();
@@ -2694,7 +2699,7 @@
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             // 只有非 all in 且有筹码的 AI 才需要自动行动
             if (!currentPlayer.isHuman && !currentPlayer.folded && !currentPlayer.isAllIn && currentPlayer.chips > 0) {
-                setTimeout(aiTurn, 1500);  // 增加延迟，让语音播报完整
+                setTimeout(aiTurn, getAIDelay());  // 根据语音开关动态调整延迟
             }
         }
         
