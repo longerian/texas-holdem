@@ -1243,9 +1243,9 @@
             // 保存游戏状态
             saveGameState();
             
-            // 找到有筹码的玩家
+            // 找到有筹码的玩家（跳过破产/弃牌的玩家）
             let dealerPlayer = gameState.players[gameState.dealerIndex];
-            while (dealerPlayer.chips <= 0) {
+            while (dealerPlayer.chips <= 0 || dealerPlayer.folded) {
                 gameState.dealerIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
                 dealerPlayer = gameState.players[gameState.dealerIndex];
             }
@@ -1253,14 +1253,14 @@
             // 发牌
             dealCards();
             
-            // 设置盲注
+            // 设置盲注（跳过破产/弃牌的玩家）
             let smallBlindIndex = (gameState.dealerIndex + 1) % NUM_PLAYERS;
-            while (gameState.players[smallBlindIndex].chips <= 0) {
+            while (gameState.players[smallBlindIndex].chips <= 0 || gameState.players[smallBlindIndex].folded) {
                 smallBlindIndex = (smallBlindIndex + 1) % NUM_PLAYERS;
             }
             
             let bigBlindIndex = (smallBlindIndex + 1) % NUM_PLAYERS;
-            while (gameState.players[bigBlindIndex].chips <= 0) {
+            while (gameState.players[bigBlindIndex].chips <= 0 || gameState.players[bigBlindIndex].folded) {
                 bigBlindIndex = (bigBlindIndex + 1) % NUM_PLAYERS;
             }
             
@@ -1284,9 +1284,9 @@
             gameState.bigBlindIndex = bigBlindIndex;  // 记录大盲注玩家索引
             gameState.smallBlindIndex = smallBlindIndex;  // 记录小盲注玩家索引
             
-            // 从大盲注后开始
+            // 从大盲注后开始（跳过破产/弃牌的玩家）
             gameState.currentPlayerIndex = (bigBlindIndex + 1) % NUM_PLAYERS;
-            while (gameState.players[gameState.currentPlayerIndex].chips <= 0) {
+            while (gameState.players[gameState.currentPlayerIndex].chips <= 0 || gameState.players[gameState.currentPlayerIndex].folded) {
                 gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % NUM_PLAYERS;
             }
             
