@@ -240,6 +240,86 @@
             align-items: center;
             color: #ffd700;
             font-weight: bold;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .raise-amount-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .raise-input {
+            width: 100px;
+            padding: 8px 12px;
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            background: rgba(255, 215, 0, 0.1);
+            color: #ffd700;
+        }
+        
+        .raise-input:focus {
+            outline: none;
+            background: rgba(255, 215, 0, 0.2);
+        }
+        
+        .adjust-btn {
+            width: 35px;
+            height: 35px;
+            padding: 0;
+            font-size: 1.3em;
+            font-weight: bold;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .adjust-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .adjust-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .quick-raise-buttons {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 5px 0;
+        }
+        
+        .quick-btn {
+            padding: 6px 12px;
+            font-size: 0.85em;
+            background: linear-gradient(135deg, #5a6c8a 0%, #4a5c7a 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 60px;
+        }
+        
+        .quick-btn:hover {
+            background: linear-gradient(135deg, #6a7c9a 0%, #5a6c8a 100%);
+            transform: translateY(-2px);
+        }
+        
+        .quick-btn.allin-btn {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+        
+        .quick-btn.allin-btn:hover {
+            background: linear-gradient(135deg, #ff6b5b 0%, #e74c3c 100%);
         }
         
         .raise-amount {
@@ -362,6 +442,29 @@
             .raise-amount {
                 font-size: 1.3em;
             }
+            
+            .raise-input {
+                width: 80px;
+                font-size: 1em;
+                padding: 6px 8px;
+            }
+            
+            .adjust-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 1.1em;
+            }
+            
+            .quick-btn {
+                padding: 5px 10px;
+                font-size: 0.75em;
+                min-width: 50px;
+            }
+            
+            .raise-display {
+                flex-direction: column;
+                align-items: flex-start;
+            }
         }
         
         @media (max-width: 480px) {
@@ -430,6 +533,7 @@
                 <div class="stat-value" id="gamePhase">等待开始</div>
             </div>
             <button id="voiceBtn" class="audio-btn active" onclick="toggleVoice()" style="padding: 8px 16px; border-radius: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; cursor: pointer; font-size: 14px;">🎙️ 语音</button>
+            <button id="nameBtn" class="audio-btn" onclick="changePlayerName()" style="padding: 8px 16px; border-radius: 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border: none; cursor: pointer; font-size: 14px; margin-left: 10px;">✏️ 改名</button>
         </div>
         
         <div class="table">
@@ -591,6 +695,25 @@
             }
         }
         
+        // 修改玩家名字
+        function changePlayerName() {
+            const newName = prompt('请输入新名字：', gameState.players[0]?.name || '玩家');
+            if (newName && newName.trim()) {
+                const trimmedName = newName.trim();
+                gameState.players[0].name = trimmedName;
+                localStorage.setItem('texasHoldemPlayerName', trimmedName);
+                
+                // 更新语音系统
+                if (voiceSystem && voiceSystem.playerVoices) {
+                    voiceSystem.playerVoices[0].name = trimmedName;
+                }
+                
+                // 更新显示
+                renderPlayers();
+                setMessage(`名字已更新为: ${trimmedName}`);
+            }
+        }
+        
         // 创建牌组
         function createDeck() {
             let deck = [];
@@ -614,10 +737,23 @@
         // 初始化玩家
         function initPlayers() {
             gameState.players = [];
+            
+            // 获取或输入玩家名字
+            let playerName = localStorage.getItem('texasHoldemPlayerName');
+            if (!playerName) {
+                playerName = prompt('请输入你的名字：', '玩家');
+                if (playerName && playerName.trim()) {
+                    playerName = playerName.trim();
+                    localStorage.setItem('texasHoldemPlayerName', playerName);
+                } else {
+                    playerName = '玩家';
+                }
+            }
+            
             for (let i = 0; i < NUM_PLAYERS; i++) {
                 gameState.players.push({
                     id: i,
-                    name: i === 0 ? '你' : `电脑 ${i}`,
+                    name: i === 0 ? playerName : `电脑 ${i}`,
                     isHuman: i === 0,
                     chips: 1000,
                     hand: [],
@@ -626,10 +762,105 @@
                     isAllIn: false
                 });
             }
+            
+            // 更新语音系统的玩家名字
+            if (voiceSystem && voiceSystem.playerVoices) {
+                voiceSystem.playerVoices[0].name = playerName;
+            }
+        }
+        
+        // ==================== 游戏状态保存与恢复 ====================
+        
+        // 保存游戏状态到 localStorage
+        function saveGameState() {
+            try {
+                const saveData = {
+                    timestamp: Date.now(),
+                    gameState: {
+                        players: gameState.players.map(p => ({
+                            id: p.id,
+                            name: p.name,
+                            isHuman: p.isHuman,
+                            chips: p.chips,
+                            hand: p.hand,
+                            bet: p.bet,
+                            folded: p.folded,
+                            isAllIn: p.isAllIn
+                        })),
+                        communityCards: gameState.communityCards,
+                        pot: gameState.pot,
+                        currentBet: gameState.currentBet,
+                        phase: gameState.phase,
+                        currentPlayerIndex: gameState.currentPlayerIndex,
+                        dealerIndex: gameState.dealerIndex,
+                        bigBlindIndex: gameState.bigBlindIndex,
+                        smallBlindIndex: gameState.smallBlindIndex,
+                        lastRaisePlayerIndex: gameState.lastRaisePlayerIndex,
+                        actedThisRound: [...gameState.actedThisRound],
+                        gameActive: gameState.gameActive,
+                        playersInitialized: gameState.playersInitialized
+                    }
+                };
+                localStorage.setItem('texasHoldemGameState', JSON.stringify(saveData));
+            } catch (e) {
+                console.warn('保存游戏状态失败:', e);
+            }
+        }
+        
+        // 恢复游戏状态
+        function restoreGameState() {
+            try {
+                const savedData = localStorage.getItem('texasHoldemGameState');
+                if (!savedData) return false;
+                
+                const saveData = JSON.parse(savedData);
+                const savedState = saveData.gameState;
+                
+                // 检查是否有有效数据
+                if (!savedState || !savedState.players || savedState.players.length === 0) {
+                    return false;
+                }
+                
+                // 检查是否所有人都破产了
+                const hasChips = savedState.players.some(p => p.chips > 0 || p.isHuman);
+                if (!hasChips) {
+                    console.log('所有玩家已破产，清除旧存档');
+                    localStorage.removeItem('texasHoldemGameState');
+                    return false;
+                }
+                
+                // 恢复游戏状态
+                gameState.players = savedState.players;
+                gameState.communityCards = savedState.communityCards;
+                gameState.pot = savedState.pot;
+                gameState.currentBet = savedState.currentBet;
+                gameState.phase = savedState.phase;
+                gameState.currentPlayerIndex = savedState.currentPlayerIndex;
+                gameState.dealerIndex = savedState.dealerIndex;
+                gameState.bigBlindIndex = savedState.bigBlindIndex || -1;
+                gameState.smallBlindIndex = savedState.smallBlindIndex || -1;
+                gameState.lastRaisePlayerIndex = savedState.lastRaisePlayerIndex || -1;
+                gameState.actedThisRound = savedState.actedThisRound || [];
+                gameState.gameActive = savedState.gameActive;
+                gameState.playersInitialized = savedState.playersInitialized;
+                
+                console.log('✅ 游戏状态已恢复 - 保存时间:', new Date(saveData.timestamp).toLocaleString());
+                return true;
+            } catch (e) {
+                console.warn('恢复游戏状态失败:', e);
+                return false;
+            }
+        }
+        
+        // 清除保存的游戏状态
+        function clearSavedGame() {
+            localStorage.removeItem('texasHoldemGameState');
+            console.log('已清除保存的游戏状态');
         }
         
         // 重置游戏（完全重新开始）
         function resetGame() {
+            clearSavedGame(); // 清除旧存档
             initPlayers();
             gameState.playersInitialized = true;
             gameState.dealerIndex = Math.floor(Math.random() * NUM_PLAYERS);
@@ -800,18 +1031,48 @@
             
             if (canRaise) {
                 const maxRaise = player.chips + player.bet;  // 可以加注的最大金额
+                const pot = gameState.pot;
+                
+                // 快捷加注金额
+                const halfPot = Math.floor(pot * 0.5);
+                const fullPot = pot;
+                const doublePot = pot * 2;
+                
+                // 根据筹码数量动态调整步进值
+                let step = 10;
+                if (maxRaise > 500) step = 25;
+                if (maxRaise > 1000) step = 50;
+                if (maxRaise > 2000) step = 100;
                 
                 html += `
                     <div class="raise-controls" id="raiseControls" style="display: none;">
                         <div class="raise-slider-container">
                             <div class="raise-display">
                                 <span>加注金额:</span>
-                                <span class="raise-amount" id="raiseAmount">${minRaise}</span>
+                                <div class="raise-amount-controls">
+                                    <button class="adjust-btn" onclick="adjustRaiseAmount(-${step})">−</button>
+                                    <input type="number" id="raiseInput" class="raise-input" 
+                                           value="${minRaise}" min="${minRaise}" max="${maxRaise}"
+                                           onchange="updateRaiseSlider()">
+                                    <button class="adjust-btn" onclick="adjustRaiseAmount(${step})">+</button>
+                                </div>
                             </div>
                             <input type="range" id="raiseSlider" min="${minRaise}" 
-                                   max="${maxRaise}" value="${minRaise}" 
-                                   oninput="updateRaiseAmount()">
+                                   max="${maxRaise}" value="${minRaise}" step="${step}"
+                                   oninput="updateRaiseFromSlider()">
                         </div>
+                        
+                        <div class="quick-raise-buttons">
+                            <button class="quick-btn" onclick="setQuickRaise(${minRaise})">最小</button>
+                            ${halfPot >= minRaise && halfPot <= maxRaise ? 
+                                `<button class="quick-btn" onclick="setQuickRaise(${halfPot})">1/2底池</button>` : ''}
+                            ${fullPot >= minRaise && fullPot <= maxRaise ? 
+                                `<button class="quick-btn" onclick="setQuickRaise(${fullPot})">底池</button>` : ''}
+                            ${doublePot >= minRaise && doublePot <= maxRaise ? 
+                                `<button class="quick-btn" onclick="setQuickRaise(${doublePot})">2倍底池</button>` : ''}
+                            <button class="quick-btn allin-btn" onclick="setQuickRaise(${maxRaise})">All-in</button>
+                        </div>
+                        
                         <div class="raise-buttons">
                             <button class="raise-btn" onclick="confirmRaise()">确认加注</button>
                             <button onclick="hideRaiseControls()">取消</button>
@@ -834,9 +1095,116 @@
             document.getElementById('raiseControls').style.display = 'none';
         }
         
+        // 从slider更新数字输入框
+        function updateRaiseFromSlider() {
+            const slider = document.getElementById('raiseSlider');
+            const input = document.getElementById('raiseInput');
+            input.value = slider.value;
+        }
+        
+        // 从数字输入框更新slider
+        function updateRaiseSlider() {
+            const slider = document.getElementById('raiseSlider');
+            const input = document.getElementById('raiseInput');
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            let value = parseInt(input.value) || min;
+            
+            // 确保在有效范围内
+            value = Math.max(min, Math.min(max, value));
+            input.value = value;
+            slider.value = value;
+            
+            // 如果输入值超出范围，显示提示
+            const originalValue = parseInt(input.value);
+            if (originalValue < min || originalValue > max) {
+                input.style.borderColor = '#e74c3c';
+                setTimeout(() => {
+                    input.style.borderColor = '#ffd700';
+                }, 500);
+            }
+        }
+        
+        // 防止输入非法字符
+        document.addEventListener('DOMContentLoaded', function() {
+            const raiseInput = document.getElementById('raiseInput');
+            if (raiseInput) {
+                raiseInput.addEventListener('keypress', function(e) {
+                    // 只允许数字
+                    if (!/[0-9]/.test(e.key) && e.key !== 'Enter') {
+                        e.preventDefault();
+                    }
+                    // Enter键确认
+                    if (e.key === 'Enter') {
+                        confirmRaise();
+                    }
+                });
+            }
+            
+            // 尝试恢复游戏状态
+            if (restoreGameState()) {
+                updateDisplay();
+                renderPlayers();
+                updateControls();
+                
+                const savedTime = localStorage.getItem('texasHoldemGameState');
+                if (savedTime) {
+                    const saveData = JSON.parse(savedTime);
+                    const timeDiff = Date.now() - saveData.timestamp;
+                    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    if (hours > 0) {
+                        setMessage(`欢迎回来！已恢复 ${hours}小时${minutes}分钟前的游戏进度`);
+                    } else if (minutes > 0) {
+                        setMessage(`欢迎回来！已恢复 ${minutes}分钟前的游戏进度`);
+                    } else {
+                        setMessage(`欢迎回来！已恢复游戏进度`);
+                    }
+                }
+                
+                // 如果当前是玩家回合，提示继续
+                const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                if (gameState.gameActive && currentPlayer.isHuman && !currentPlayer.folded && !currentPlayer.isAllIn) {
+                    setTimeout(() => {
+                        setMessage(`轮到你行动了！`);
+                    }, 2000);
+                }
+            }
+        });
+        
+        // 调整加注金额（+/- 按钮）
+        function adjustRaiseAmount(delta) {
+            const slider = document.getElementById('raiseSlider');
+            const input = document.getElementById('raiseInput');
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            let value = parseInt(slider.value) + delta;
+            
+            // 确保在有效范围内
+            value = Math.max(min, Math.min(max, value));
+            slider.value = value;
+            input.value = value;
+        }
+        
+        // 快捷设置加注金额
+        function setQuickRaise(amount) {
+            const slider = document.getElementById('raiseSlider');
+            const input = document.getElementById('raiseInput');
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            
+            // 确保在有效范围内
+            amount = Math.max(min, Math.min(max, amount));
+            slider.value = amount;
+            input.value = amount;
+        }
+        
+        // 获取当前加注金额
         function updateRaiseAmount() {
-            const value = document.getElementById('raiseSlider').value;
-            document.getElementById('raiseAmount').textContent = value;
+            const slider = document.getElementById('raiseSlider');
+            const input = document.getElementById('raiseInput');
+            return parseInt(slider.value) || parseInt(input.value) || 0;
         }
         
         // 开始新游戏
@@ -851,6 +1219,7 @@
             const activePlayers = gameState.players.filter(p => p.chips > 0 || p.isHuman);
             if (activePlayers.length < 2) {
                 setMessage('游戏结束！没有足够的玩家继续游戏');
+                clearSavedGame(); // 清除存档
                 return;
             }
             
@@ -870,6 +1239,9 @@
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             gameState.actedThisRound = [];  // 重置行动记录
             gameState.bigBlindIndex = -1;  // 将在设置盲注后更新
+            
+            // 保存游戏状态
+            saveGameState();
             
             // 找到有筹码的玩家
             let dealerPlayer = gameState.players[gameState.dealerIndex];
@@ -920,9 +1292,11 @@
             
             updateDisplay();
             
+            // 显示盲注提示
+            const blindMessage = `${smallBlindPlayer.name} 小盲 ${actualSmallBlind} | ${bigBlindPlayer.name} 大盲 ${actualBigBlind}`;
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             const dealerInfo = `庄家: ${gameState.players[gameState.dealerIndex].name}`;
-            setMessage(`${dealerInfo} | ${currentPlayer.name}的回合`);
+            setMessage(`${blindMessage} | ${dealerInfo} | ${currentPlayer.name}的回合`);
             updateControls();
             
             // 如果当前玩家是电脑，自动行动
@@ -949,6 +1323,7 @@
             
             setMessage('你选择过牌');
             updateDisplay();
+            saveGameState();
             nextPlayer();
         }
         
@@ -986,12 +1361,13 @@
             }
             
             updateDisplay();
+            saveGameState();
             nextPlayer();
         }
         
         function confirmRaise() {
             const player = gameState.players[0];
-            const raiseAmount = parseInt(document.getElementById('raiseSlider').value);
+            const raiseAmount = updateRaiseAmount(); // 使用新函数获取金额
             const toCall = raiseAmount - player.bet;
             
             const minRaise = gameState.currentBet + 10;
@@ -1038,6 +1414,7 @@
             
             hideRaiseControls();
             updateDisplay();
+            saveGameState();
             nextPlayer();
         }
         
@@ -1053,11 +1430,15 @@
             setMessage('你弃牌了');
             voiceSystem.announceAction(0, 'fold');
             updateDisplay();
+            saveGameState();
             nextPlayer();
         }
         
         // 下一个玩家
         function nextPlayer() {
+            // 保存游戏状态（每次玩家/AI操作后）
+            saveGameState();
+            
             // 检查是否只剩一个玩家
             const activePlayers = gameState.players.filter(p => !p.folded);
             if (activePlayers.length === 1) {
@@ -1784,6 +2165,117 @@
             return gameState.currentBet > gameState.bigBlind * 3;
         }
         
+        // ==================== 智能慢打系统 ====================
+        
+        // 判断是否应该慢打（Slow Play）
+        function shouldSlowPlay(player, strength, boardTexture, positionAdv, playerAggression) {
+            // 基础条件：必须有超强牌
+            if (strength.tier < 4) return { slowPlay: false, reason: '牌力不够' };
+            
+            let slowPlayScore = 0;
+            let reasons = [];
+            
+            // 1. 对手激进度（0-40分）
+            // 对手越激进，越应该慢打让他们自己下注
+            if (playerAggression > 0.8) {
+                slowPlayScore += 40;
+                reasons.push('对手极度激进');
+            } else if (playerAggression > 0.7) {
+                slowPlayScore += 30;
+                reasons.push('对手很激进');
+            } else if (playerAggression > 0.6) {
+                slowPlayScore += 20;
+                reasons.push('对手较激进');
+            } else if (playerAggression > 0.5) {
+                slowPlayScore += 10;
+                reasons.push('对手中等激进度');
+            }
+            
+            // 2. 牌面干燥度（0-30分）
+            // 干牌面更适合慢打（较少听牌威胁）
+            if (boardTexture === 'dry') {
+                slowPlayScore += 30;
+                reasons.push('干牌面安全');
+            } else if (boardTexture === 'wet') {
+                // 湿牌面不适合慢打（有被反超风险）
+                return { slowPlay: false, reason: '湿牌面有风险' };
+            }
+            
+            // 3. 位置优势（0-20分）
+            // 位置差时更倾向慢打（控制底池）
+            if (positionAdv < 0.5) {
+                slowPlayScore += 20;
+                reasons.push('位置差需要控制底池');
+            } else if (positionAdv < 0.7) {
+                slowPlayScore += 10;
+                reasons.push('中等位置');
+            }
+            
+            // 4. 牌力极端性（0-10分）
+            // 绝对坚果更适合慢打
+            if (strength.isNuts) {
+                slowPlayScore += 10;
+                reasons.push('绝对坚果');
+            }
+            
+            // 5. 底池大小（额外因素）
+            // 底池已经很小时，更倾向慢打吸引下注
+            const potSize = gameState.pot;
+            if (potSize < gameState.bigBlind * 10) {
+                slowPlayScore += 5;
+                reasons.push('小底池需要构建');
+            }
+            
+            // 决策：得分>=50分则慢打
+            const shouldSlow = slowPlayScore >= 50 && Math.random() < 0.6; // 60%概率执行
+            
+            return {
+                slowPlay: shouldSlow,
+                score: slowPlayScore,
+                reasons,
+                trapType: shouldSlow ? getTrapType(strength, boardTexture) : null
+            };
+        }
+        
+        // 确定陷阱类型（Check-Call vs Check-Raise）
+        function getTrapType(strength, boardTexture) {
+            // 超强牌 + 干牌面 = 更激进的check-raise
+            if (strength.tier >= 5 && boardTexture === 'dry') {
+                return Math.random() < 0.7 ? 'checkRaise' : 'checkCall';
+            }
+            // 一般强牌 = 更保守的check-call
+            return Math.random() < 0.4 ? 'checkRaise' : 'checkCall';
+        }
+        
+        // 判断是否执行Check-Raise陷阱
+        function shouldCheckRaise(player, strength, boardTexture, activeOpponents) {
+            // 基础条件：强牌以上
+            if (strength.tier < 3) return false;
+            
+            let checkRaiseScore = 0;
+            
+            // 1. 对手数量（越多越值得check-raise）
+            if (activeOpponents.length >= 3) checkRaiseScore += 30;
+            else if (activeOpponents.length >= 2) checkRaiseScore += 20;
+            else checkRaiseScore += 10;
+            
+            // 2. 牌面干燥度
+            if (boardTexture === 'dry') checkRaiseScore += 25;
+            else if (boardTexture === 'wet') checkRaiseScore += 10;
+            
+            // 3. 牌力强度
+            if (strength.tier >= 5) checkRaiseScore += 30;
+            else if (strength.tier >= 4) checkRaiseScore += 25;
+            else checkRaiseScore += 15;
+            
+            // 4. 筹码深度（深筹码更值得）
+            const spr = player.chips / Math.max(1, gameState.pot);
+            if (spr > 8) checkRaiseScore += 15;
+            else if (spr > 5) checkRaiseScore += 10;
+            
+            return checkRaiseScore >= 60 && Math.random() < 0.65;
+        }
+        
         // AI 回合（职业级别决策）
         function aiTurn() {
             if (!gameState.gameActive) return;
@@ -1951,19 +2443,43 @@
                 // 根据多街计划调整决策
                 const plannedAction = multiStreetPlan.current?.action;
                 
-                // ===== 职业牌手核心：底池赔率 + 范围思维 + 诈唬检测 =====
+                // ===== 职业牌手核心：底池赔率 + 范围思维 + 诈唬检测 + 慢打陷阱 =====
                 
                 if (detailedStrength.tier >= 4) {
                     // 超强牌（Set、两对以上）- 几乎永远不弃牌
                     if (toCall === 0) {
-                        decision = Math.random() < (plannedAction === 'value' ? 0.75 : 0.5) ? 'raise' : 'check';
+                        // 智能慢打检测
+                        const slowPlayDecision = shouldSlowPlay(player, detailedStrength, boardTexture, positionAdv, playerAggression);
+                        
+                        if (slowPlayDecision.slowPlay) {
+                            // 执行慢打陷阱
+                            decision = 'check';
+                            console.log(`🦈 AI${player.id} 慢打陷阱: ${slowPlayDecision.reasons.join(', ')} (得分:${slowPlayDecision.score})`);
+                        } else {
+                            // 正常价值下注
+                            decision = Math.random() < (plannedAction === 'value' ? 0.75 : 0.5) ? 'raise' : 'check';
+                        }
                     } else {
-                        decision = Math.random() < 0.7 ? 'raise' : 'call';
+                        // 面对下注：考虑check-raise陷阱
+                        if (shouldCheckRaise(player, detailedStrength, boardTexture, activeOpponents)) {
+                            // 先跟注，准备check-raise
+                            decision = 'call';
+                            console.log(`🎯 AI${player.id} Check-Call陷阱 (准备后续加注)`);
+                        } else {
+                            decision = Math.random() < 0.7 ? 'raise' : 'call';
+                        }
                     }
                 } else if (detailedStrength.tier >= 3) {
                     // 强牌（顶对好踢脚、超对、三条、顺子、同花）- 职业牌手几乎不弃
                     if (toCall === 0) {
-                        if (isRaiser && shouldCBet(player, boardTexture)) {
+                        // 对抗激进对手时考虑慢打
+                        const slowPlayDecision = shouldSlowPlay(player, detailedStrength, boardTexture, positionAdv, playerAggression);
+                        
+                        if (slowPlayDecision.slowPlay && playerAggression > 0.6) {
+                            // 对手足够激进才慢打
+                            decision = 'check';
+                            console.log(`🦈 AI${player.id} 强牌慢打: ${slowPlayDecision.reasons.join(', ')}`);
+                        } else if (isRaiser && shouldCBet(player, boardTexture)) {
                             decision = 'raise';
                         } else {
                             decision = Math.random() < 0.65 ? 'raise' : 'check'; // 更激进
@@ -2331,6 +2847,7 @@
             
             // 从庄家后第一个玩家开始
             gameState.currentPlayerIndex = getFirstPlayerIndex();
+            saveGameState(); // 保存阶段转换后的状态
             updateDisplay();
             updateControls();
             
@@ -2365,6 +2882,39 @@
             return 0; // 完全相同
         }
         
+        // 计算边注池（Side Pot）
+        // 返回：[{ eligiblePlayers: [], amount: number }, ...]
+        function calculateSidePots(activePlayers) {
+            // 按下注金额排序（从小到大）
+            const sortedByBet = [...activePlayers].sort((a, b) => a.bet - b.bet);
+            const pots = [];
+            let previousBet = 0;
+            
+            for (let i = 0; i < sortedByBet.length; i++) {
+                const currentPlayer = sortedByBet[i];
+                const currentBet = currentPlayer.bet;
+                
+                if (currentBet > previousBet) {
+                    // 这一层的注池金额 = (当前下注 - 之前下注) × 有资格的玩家数
+                    const layerAmount = currentBet - previousBet;
+                    // 有资格的玩家 = 下注 >= 当前下注的所有玩家
+                    const eligiblePlayers = sortedByBet.filter(p => p.bet >= currentBet);
+                    const potAmount = layerAmount * eligiblePlayers.length;
+                    
+                    if (potAmount > 0) {
+                        pots.push({
+                            amount: potAmount,
+                            eligiblePlayers: eligiblePlayers.map(p => p.id),
+                            betLevel: currentBet
+                        });
+                    }
+                    previousBet = currentBet;
+                }
+            }
+            
+            return pots;
+        }
+        
         function showdown() {
             gameState.phase = 'showdown';
             gameState.gameActive = false;
@@ -2384,33 +2934,62 @@
             
             // 排序找到赢家（使用完整比较函数）
             playerHands.sort(compareHands);
-            const winners = [playerHands[0]];
-            
-            // 检查是否有平局（完全相同的牌力）
-            for (let i = 1; i < playerHands.length; i++) {
-                if (compareHands(playerHands[0], playerHands[i]) === 0) {
-                    winners.push(playerHands[i]);
-                } else {
-                    break;
-                }
-            }
             
             updateDisplay();
             
-            if (winners.length === 1) {
-                const winner = winners[0].player;
-                winner.chips += gameState.pot;
-                const isPlayer = winner.isHuman;
-                setMessage(`${isPlayer ? '🎉 你' : winner.name}赢了! ${winners[0].handRank.name} - 赢得 ${gameState.pot} 筹码!`);
-                // 播报获胜
-                voiceSystem.announceAction(winner.id, 'win');
-            } else {
-                // 平局
-                const splitPot = Math.floor(gameState.pot / winners.length);
-                winners.forEach(w => w.player.chips += splitPot);
-                const winnerNames = winners.map(w => w.player.name).join(', ');
-                setMessage(`🤝 平局! ${winnerNames} 都是 ${winners[0].handRank.name} - 平分底池`);
+            // 计算边注池
+            const sidePots = calculateSidePots(activePlayers);
+            
+            let totalWon = {};
+            let winMessages = [];
+            
+            // 分配每个边注池
+            for (const pot of sidePots) {
+                // 在该边注池有资格的玩家中找赢家
+                const eligibleHands = playerHands.filter(ph => pot.eligiblePlayers.includes(ph.player.id));
+                
+                if (eligibleHands.length === 0) continue;
+                
+                // 找出该池中的赢家（可能有平局）
+                const potWinners = [eligibleHands[0]];
+                for (let i = 1; i < eligibleHands.length; i++) {
+                    if (compareHands(eligibleHands[0], eligibleHands[i]) === 0) {
+                        potWinners.push(eligibleHands[i]);
+                    } else {
+                        break;
+                    }
+                }
+                
+                // 平分该边注池
+                const share = Math.floor(pot.amount / potWinners.length);
+                potWinners.forEach(w => {
+                    w.player.chips += share;
+                    totalWon[w.player.id] = (totalWon[w.player.id] || 0) + share;
+                });
             }
+            
+            // 生成结果消息
+            const mainWinner = playerHands[0].player;
+            const isPlayer = mainWinner.isHuman;
+            const totalWinAmount = totalWon[mainWinner.id] || 0;
+            
+            // 检查是否有边注池分配给不同玩家的情况
+            const uniqueWinners = Object.keys(totalWon);
+            if (uniqueWinners.length === 1) {
+                setMessage(`${isPlayer ? '🎉 你' : mainWinner.name}赢了! ${playerHands[0].handRank.name} - 赢得 ${totalWinAmount} 筹码!`);
+            } else {
+                // 有边注池分配给多个玩家
+                let msg = `🎭 摊牌结果:\n`;
+                for (const ph of playerHands) {
+                    if (totalWon[ph.player.id]) {
+                        msg += `${ph.player.name}: ${ph.handRank.name} - 赢得 ${totalWon[ph.player.id]} 筹码\n`;
+                    }
+                }
+                setMessage(msg.trim());
+            }
+            
+            // 播报获胜
+            voiceSystem.announceAction(mainWinner.id, 'win');
             
             updateDisplay();
             updateControls();
@@ -2430,6 +3009,7 @@
             
             updateDisplay();
             updateControls();
+            saveGameState(); // 保存游戏结束状态
         }
         
         // 评估翻牌前手牌强度
