@@ -867,6 +867,19 @@
             startNewGame();
         }
         
+        // 刷新筹码（所有玩家筹码重置为1000）
+        function refreshChips() {
+            gameState.players.forEach(player => {
+                player.chips = 1000;
+                player.folded = false;
+                player.isAllIn = false;
+            });
+            clearSavedGame(); // 清除旧存档
+            setMessage('✅ 所有玩家筹码已刷新为1000！');
+            updateDisplay();
+            updateControls();
+        }
+        
         // 发牌
         function dealCards() {
             gameState.deck = shuffle(createDeck());
@@ -983,6 +996,7 @@
                 controlsDiv.innerHTML = `
                     <div class="controls-row">
                         ${buttonHtml}
+                        <button class="new-game" onclick="refreshChips()" style="margin-left: 10px; background: #2196F3;">刷新筹码</button>
                     </div>
                 `;
                 return;
