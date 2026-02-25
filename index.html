@@ -515,30 +515,32 @@
             position: fixed;
             bottom: 10px;
             right: 10px;
-            width: 300px;
-            max-height: 150px;
-            background: rgba(0,0,0,0.8);
+            width: 320px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.9);
             color: #0f0;
             font-family: monospace;
-            font-size: 11px;
-            padding: 8px;
+            font-size: 12px;
+            padding: 10px;
             border-radius: 8px;
             overflow-y: auto;
             z-index: 9999;
-            display: none;
-        }
-        #debug-panel.show {
-            display: block;
+            border: 2px solid #0f0;
         }
         #debug-panel .debug-line {
-            margin: 2px 0;
+            margin: 3px 0;
             border-bottom: 1px solid #333;
             padding-bottom: 2px;
+        }
+        #debug-panel .title {
+            color: #ff0;
+            font-weight: bold;
+            margin-bottom: 5px;
         }
     </style>
 </head>
 <body>
-    <div id="debug-panel"></div>
+    <div id="debug-panel"><div class="title">🐛 调试面板</div></div>
     <div class="game-container">
         <h1>🃏 德州扑克 Texas Hold'em</h1>
         
@@ -1003,15 +1005,15 @@
             console.log(msg);
             const panel = document.getElementById('debug-panel');
             if (panel) {
-                panel.classList.add('show');
                 const line = document.createElement('div');
                 line.className = 'debug-line';
                 line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
                 panel.appendChild(line);
                 panel.scrollTop = panel.scrollHeight;
-                // 只保留最近20条
-                while (panel.children.length > 20) {
-                    panel.removeChild(panel.firstChild);
+                // 只保留最近30条
+                while (panel.querySelectorAll('.debug-line').length > 30) {
+                    const first = panel.querySelector('.debug-line');
+                    if (first) first.remove();
                 }
             }
         }
