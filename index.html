@@ -3021,6 +3021,19 @@
         }
         
         function showdown() {
+            // ⚠️ 保护：如果公共牌不够5张，先发完再摊牌
+            if (gameState.communityCards.length < 5) {
+                const missing = 5 - gameState.communityCards.length;
+                debugLog(`⚠️ 公共牌不足(只有${gameState.communityCards.length}张)，补发${missing}张`);
+                for (let i = 0; i < missing; i++) {
+                    const card = gameState.deck.pop();
+                    if (card) {
+                        gameState.communityCards.push(card);
+                    }
+                }
+                updateDisplay();
+            }
+            
             debugLog(`🎭 摊牌开始 - 公共牌数: ${gameState.communityCards.length}`);
             gameState.phase = 'showdown';
             gameState.gameActive = false;
