@@ -509,9 +509,36 @@
                 padding: 10px;
             }
         }
+        
+        /* 调试面板样式 */
+        #debug-panel {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            max-height: 150px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            border-radius: 8px;
+            overflow-y: auto;
+            z-index: 9999;
+            display: none;
+        }
+        #debug-panel.show {
+            display: block;
+        }
+        #debug-panel .debug-line {
+            margin: 2px 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 2px;
+        }
     </style>
 </head>
 <body>
+    <div id="debug-panel"></div>
     <div class="game-container">
         <h1>🃏 德州扑克 Texas Hold'em</h1>
         
@@ -969,6 +996,24 @@
             communityDiv.innerHTML = gameState.communityCards.map(card => displayCard(card)).join('');
             
             renderPlayers();
+        }
+        
+        // 调试日志函数
+        function debugLog(msg) {
+            console.log(msg);
+            const panel = document.getElementById('debug-panel');
+            if (panel) {
+                panel.classList.add('show');
+                const line = document.createElement('div');
+                line.className = 'debug-line';
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                panel.appendChild(line);
+                panel.scrollTop = panel.scrollHeight;
+                // 只保留最近20条
+                while (panel.children.length > 20) {
+                    panel.removeChild(panel.firstChild);
+                }
+            }
         }
         
         // 设置消息
@@ -1484,7 +1529,7 @@
             if (allActed && allMatched && !bigBlindHasOption) {
                 // 所有人都已行动且已匹配，检查是否应该直接摊牌
                 const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
-                console.log(`📊 下注轮结束 - 非all in玩家数: ${nonAllInPlayers.length}, 当前公共牌数: ${gameState.communityCards.length}`);
+                debugLog(`📊 下注轮结束 - 非all in: ${nonAllInPlayers.length}, 公共牌: ${gameState.communityCards.length}`);
                 
                 if (nonAllInPlayers.length <= 1) {
                     // 只剩 0 或 1 个可以行动的玩家，直接发完牌摊牌
@@ -1495,12 +1540,12 @@
                         if (card) {
                             cardsToDeal.push(card);
                         } else {
-                            console.error('❌ 牌组中没有足够的牌！');
+                            debugLog('❌ 牌组中没有足够的牌！');
                             break;
                         }
                     }
                     
-                    console.log(`🎴 准备发牌 - 需要发 ${cardsToDeal.length} 张牌`);
+                    debugLog(`🎴 准备发牌 - 需要 ${cardsToDeal.length} 张`);
                     
                     if (cardsToDeal.length > 0) {
                         gameState.phase = 'flop';
@@ -1547,7 +1592,7 @@
             
             // 如果所有玩家都是 all in 或已弃牌，直接发完牌并摊牌
             const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
-            console.log(`📊 所有玩家行动完毕 - 非all in玩家数: ${nonAllInPlayers.length}, 当前公共牌数: ${gameState.communityCards.length}`);
+            debugLog(`📊 全员行动完毕 - 非all in: ${nonAllInPlayers.length}, 公共牌: ${gameState.communityCards.length}`);
             
             if (nonAllInPlayers.length === 0) {
                 // 所有人都 all in，直接发完牌并摊牌
@@ -1558,12 +1603,12 @@
                     if (card) {
                         cardsToDeal.push(card);
                     } else {
-                        console.error('❌ 牌组中没有足够的牌！');
+                        debugLog('❌ 牌组中没有足够的牌！');
                         break;
                     }
                 }
                 
-                console.log(`🎴 准备发牌（全员all in） - 需要发 ${cardsToDeal.length} 张牌`);
+                debugLog(`🎴 发牌(全员all in) - 需要 ${cardsToDeal.length} 张`);
                 
                 if (cardsToDeal.length > 0) {
                     gameState.phase = 'flop';
@@ -2831,7 +2876,7 @@
                 return;
             }
             
-            console.log(`🎴 开始发牌，共 ${cardsToDeal.length} 张`);
+            debugLog(`🎴 开始发牌，共 ${cardsToDeal.length} 张`);
             
             let delay = 0;
             const delayIncrement = 500; // 每张牌间隔500毫秒
@@ -2842,7 +2887,7 @@
                     updateDisplay();
                     
                     const currentLength = gameState.communityCards.length;
-                    console.log(`发第 ${index + 1} 张牌，当前公共牌数量: ${currentLength}`);
+                    debugLog(`发第 ${index + 1} 张，公共牌数: ${currentLength}`);
                     
                     // 设置消息
                     if (currentLength === 3) {
@@ -2855,7 +2900,7 @@
                     
                     // 最后一张牌发完后执行回调
                     if (index === cardsToDeal.length - 1 && callback) {
-                        console.log('✅ 所有牌发完，准备摊牌');
+                        debugLog('✅ 所有牌发完，准备摊牌');
                         setTimeout(callback, 300);
                     }
                 }, delay);
@@ -2868,7 +2913,7 @@
         function nextPhase() {
             // 如果正在发牌，不要干扰
             if (gameState.dealingCards) {
-                console.log('⚠️ 正在发牌中，跳过 nextPhase');
+                debugLog('⚠️ 正在发牌中，跳过 nextPhase');
                 return;
             }
             
@@ -2880,7 +2925,7 @@
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             gameState.actedThisRound = [];  // 重置行动记录
             
-            console.log(`📍 进入下一阶段 - 当前阶段: ${gameState.phase}, 公共牌数: ${gameState.communityCards.length}`);
+            debugLog(`📍 进入下一阶段 - ${gameState.phase}, 公共牌: ${gameState.communityCards.length}`);
             
             if (gameState.phase === 'preflop') {
                 gameState.phase = 'flop';
@@ -2974,6 +3019,7 @@
         }
         
         function showdown() {
+            debugLog(`🎭 摊牌开始 - 公共牌数: ${gameState.communityCards.length}`);
             gameState.phase = 'showdown';
             gameState.gameActive = false;
             
