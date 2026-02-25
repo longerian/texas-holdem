@@ -1484,17 +1484,30 @@
             if (allActed && allMatched && !bigBlindHasOption) {
                 // 所有人都已行动且已匹配，检查是否应该直接摊牌
                 const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
+                console.log(`📊 下注轮结束 - 非all in玩家数: ${nonAllInPlayers.length}, 当前公共牌数: ${gameState.communityCards.length}`);
+                
                 if (nonAllInPlayers.length <= 1) {
                     // 只剩 0 或 1 个可以行动的玩家，直接发完牌摊牌
                     // 使用动画发牌
                     const cardsToDeal = [];
                     while (cardsToDeal.length + gameState.communityCards.length < 5) {
-                        cardsToDeal.push(gameState.deck.pop());
+                        const card = gameState.deck.pop();
+                        if (card) {
+                            cardsToDeal.push(card);
+                        } else {
+                            console.error('❌ 牌组中没有足够的牌！');
+                            break;
+                        }
                     }
+                    
+                    console.log(`🎴 准备发牌 - 需要发 ${cardsToDeal.length} 张牌`);
                     
                     if (cardsToDeal.length > 0) {
                         gameState.phase = 'flop';
+                        // 标记正在发牌，防止 nextPhase 干扰
+                        gameState.dealingCards = true;
                         dealCommunityCardsWithAnimation(cardsToDeal, () => {
+                            gameState.dealingCards = false;
                             gameState.phase = 'river';
                             showdown();
                         });
@@ -1534,17 +1547,29 @@
             
             // 如果所有玩家都是 all in 或已弃牌，直接发完牌并摊牌
             const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
+            console.log(`📊 所有玩家行动完毕 - 非all in玩家数: ${nonAllInPlayers.length}, 当前公共牌数: ${gameState.communityCards.length}`);
+            
             if (nonAllInPlayers.length === 0) {
                 // 所有人都 all in，直接发完牌并摊牌
                 // 使用动画发牌
                 const cardsToDeal = [];
                 while (cardsToDeal.length + gameState.communityCards.length < 5) {
-                    cardsToDeal.push(gameState.deck.pop());
+                    const card = gameState.deck.pop();
+                    if (card) {
+                        cardsToDeal.push(card);
+                    } else {
+                        console.error('❌ 牌组中没有足够的牌！');
+                        break;
+                    }
                 }
+                
+                console.log(`🎴 准备发牌（全员all in） - 需要发 ${cardsToDeal.length} 张牌`);
                 
                 if (cardsToDeal.length > 0) {
                     gameState.phase = 'flop';
+                    gameState.dealingCards = true;
                     dealCommunityCardsWithAnimation(cardsToDeal, () => {
+                        gameState.dealingCards = false;
                         gameState.phase = 'river';
                         showdown();
                     });
@@ -2801,6 +2826,13 @@
         
         // 带动画的发牌函数（用于 ALL-IN 快速发牌）
         function dealCommunityCardsWithAnimation(cardsToDeal, callback) {
+            if (!cardsToDeal || cardsToDeal.length === 0) {
+                if (callback) callback();
+                return;
+            }
+            
+            console.log(`🎴 开始发牌，共 ${cardsToDeal.length} 张`);
+            
             let delay = 0;
             const delayIncrement = 500; // 每张牌间隔500毫秒
             
@@ -2809,17 +2841,21 @@
                     gameState.communityCards.push(card);
                     updateDisplay();
                     
+                    const currentLength = gameState.communityCards.length;
+                    console.log(`发第 ${index + 1} 张牌，当前公共牌数量: ${currentLength}`);
+                    
                     // 设置消息
-                    if (gameState.communityCards.length === 3) {
+                    if (currentLength === 3) {
                         setMessage('翻牌!');
-                    } else if (gameState.communityCards.length === 4) {
+                    } else if (currentLength === 4) {
                         setMessage('转牌!');
-                    } else if (gameState.communityCards.length === 5) {
+                    } else if (currentLength === 5) {
                         setMessage('河牌!');
                     }
                     
                     // 最后一张牌发完后执行回调
                     if (index === cardsToDeal.length - 1 && callback) {
+                        console.log('✅ 所有牌发完，准备摊牌');
                         setTimeout(callback, 300);
                     }
                 }, delay);
@@ -2830,6 +2866,12 @@
         
         // 进入下一阶段
         function nextPhase() {
+            // 如果正在发牌，不要干扰
+            if (gameState.dealingCards) {
+                console.log('⚠️ 正在发牌中，跳过 nextPhase');
+                return;
+            }
+            
             // 重置所有玩家的下注和加注记录
             gameState.players.forEach(player => {
                 player.bet = 0;
@@ -2837,6 +2879,8 @@
             gameState.currentBet = 0;
             gameState.lastRaisePlayerIndex = -1;  // 重置加注记录
             gameState.actedThisRound = [];  // 重置行动记录
+            
+            console.log(`📍 进入下一阶段 - 当前阶段: ${gameState.phase}, 公共牌数: ${gameState.communityCards.length}`);
             
             if (gameState.phase === 'preflop') {
                 gameState.phase = 'flop';
