@@ -571,7 +571,7 @@
             </div>
             
             <div class="community-cards">
-                <div style="color: #ffd700; font-weight: bold; margin-bottom: 10px;">公共牌</div>
+                <div style="color: #ffd700; font-weight: bold; margin-bottom: 10px;">公共牌 <span id="communityCount" style="color:#0f0;font-size:12px;">(0/5)</span></div>
                 <div class="cards" id="communityCards"></div>
                 <div class="pot" id="potDisplay">底池: 0</div>
             </div>
@@ -983,6 +983,12 @@
             document.getElementById('potAmount').textContent = gameState.pot;
             document.getElementById('currentBet').textContent = gameState.currentBet;
             document.getElementById('potDisplay').textContent = `底池: ${gameState.pot}`;
+            
+            // 更新公共牌数量显示
+            const countEl = document.getElementById('communityCount');
+            if (countEl) {
+                countEl.textContent = `(${gameState.communityCards.length}/5)`;
+            }
             
             const phaseNames = {
                 'preflop': '翻牌前',
@@ -3031,20 +3037,30 @@
         }
         
         function showdown() {
-            // ⚠️ 保护：如果公共牌不够5张，先发完再摊牌
-            if (gameState.communityCards.length < 5) {
-                const missing = 5 - gameState.communityCards.length;
-                debugLog(`⚠️ 公共牌不足(只有${gameState.communityCards.length}张)，补发${missing}张`);
-                for (let i = 0; i < missing; i++) {
+            // ⚠️ 强制保护：确保有5张公共牌
+            const currentCards = gameState.communityCards.length;
+            
+            // 如果牌不够，强制补发
+            if (currentCards < 5) {
+                // 检查牌组是否还有牌
+                if (!gameState.deck || gameState.deck.length < (5 - currentCards)) {
+                    // 牌组不够，重新创建
+                    gameState.deck = shuffle(createDeck());
+                }
+                
+                while (gameState.communityCards.length < 5) {
                     const card = gameState.deck.pop();
                     if (card) {
                         gameState.communityCards.push(card);
                     }
                 }
-                updateDisplay();
+                // 立即更新界面
+                const communityDiv = document.getElementById('communityCards');
+                if (communityDiv) {
+                    communityDiv.innerHTML = gameState.communityCards.map(card => displayCard(card)).join('');
+                }
             }
             
-            debugLog(`🎭 摊牌开始 - 公共牌数: ${gameState.communityCards.length}`);
             gameState.phase = 'showdown';
             gameState.gameActive = false;
             
