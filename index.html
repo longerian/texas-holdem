@@ -542,7 +542,7 @@
 <body>
     <div id="debug-panel"><div class="title">🐛 调试面板</div></div>
     <div class="game-container">
-        <h1>🃏 德州扑克 Texas Hold'em</h1>
+        <h1>🃏 德州扑克 Texas Hold'em <span style="font-size:12px;color:#888;">v2.5</span></h1>
         
         <div class="stats">
             <div class="stat-card">
@@ -1537,42 +1537,20 @@
             if (allActed && allMatched && !bigBlindHasOption) {
                 // 所有人都已行动且已匹配，检查是否应该直接摊牌
                 const nonAllInPlayers = activePlayers.filter(p => !p.isAllIn && p.chips > 0);
-                debugLog(`📊 下注轮结束 - 非all in: ${nonAllInPlayers.length}, 公共牌: ${gameState.communityCards.length}`);
                 
                 if (nonAllInPlayers.length <= 1) {
                     // 只剩 0 或 1 个可以行动的玩家，直接发完牌摊牌
-                    // 直接同步发牌（不用动画，避免时序问题）
-                    setMessage('🎴 发牌中...');
-                    
-                    // 发翻牌（3张）
-                    if (gameState.communityCards.length < 3) {
-                        gameState.phase = 'flop';
-                        gameState.communityCards.push(gameState.deck.pop());
-                        gameState.communityCards.push(gameState.deck.pop());
-                        gameState.communityCards.push(gameState.deck.pop());
-                        updateDisplay();
+                    // 直接同步发5张牌
+                    gameState.phase = 'river';
+                    gameState.communityCards = [];
+                    for (let i = 0; i < 5; i++) {
+                        const card = gameState.deck.pop();
+                        if (card) gameState.communityCards.push(card);
                     }
-                    
-                    // 发转牌（1张）
-                    if (gameState.communityCards.length < 4) {
-                        gameState.phase = 'turn';
-                        gameState.communityCards.push(gameState.deck.pop());
-                        updateDisplay();
-                    }
-                    
-                    // 发河牌（1张）
-                    if (gameState.communityCards.length < 5) {
-                        gameState.phase = 'river';
-                        gameState.communityCards.push(gameState.deck.pop());
-                        updateDisplay();
-                    }
-                    
+                    updateDisplay();
                     setMessage('河牌! 摊牌!');
-                    
-                    // 延迟一点再摊牌，让玩家看清
-                    setTimeout(() => {
-                        showdown();
-                    }, 500);
+                    // 直接摊牌
+                    showdown();
                     return;
                 }
                 // 进入下一阶段
@@ -1608,38 +1586,17 @@
             
             if (nonAllInPlayers.length === 0) {
                 // 所有人都 all in，直接发完牌并摊牌
-                // 直接同步发牌
-                setMessage('🎴 发牌中...');
-                
-                // 发翻牌（3张）
-                if (gameState.communityCards.length < 3) {
-                    gameState.phase = 'flop';
-                    gameState.communityCards.push(gameState.deck.pop());
-                    gameState.communityCards.push(gameState.deck.pop());
-                    gameState.communityCards.push(gameState.deck.pop());
-                    updateDisplay();
+                // 直接同步发5张牌
+                gameState.phase = 'river';
+                gameState.communityCards = [];
+                for (let i = 0; i < 5; i++) {
+                    const card = gameState.deck.pop();
+                    if (card) gameState.communityCards.push(card);
                 }
-                
-                // 发转牌（1张）
-                if (gameState.communityCards.length < 4) {
-                    gameState.phase = 'turn';
-                    gameState.communityCards.push(gameState.deck.pop());
-                    updateDisplay();
-                }
-                
-                // 发河牌（1张）
-                if (gameState.communityCards.length < 5) {
-                    gameState.phase = 'river';
-                    gameState.communityCards.push(gameState.deck.pop());
-                    updateDisplay();
-                }
-                
+                updateDisplay();
                 setMessage('河牌! 摊牌!');
-                
-                // 延迟一点再摊牌
-                setTimeout(() => {
-                    showdown();
-                }, 500);
+                // 直接摊牌
+                showdown();
             } else if (nonAllInPlayers.length === 1) {
                 // 只剩一个人可以行动，其他人都是 all in
                 // 这个人行动后直接进入摊牌
